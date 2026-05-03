@@ -3,3 +3,6 @@ name = "tussle-core"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+
+[dependencies]
+bitflags = "2"
