@@ -12,10 +12,6 @@
 //!   - `^` = Control
 //!
 //! followed by the literal key character. So `@~n` denotes ⌘⌥N.
-//!
-//! See Apple's [NSEvent keyEquivalent docs][docs].
-//!
-//! [docs]: https://developer.apple.com/documentation/appkit/nsevent/keyequivalent
 
 use std::path::Path;
 
