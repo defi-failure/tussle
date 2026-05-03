@@ -1,11 +1,15 @@
 //! Parser for `~/Library/Preferences/com.apple.symbolichotkeys.plist`.
 //!
-//! The plist holds user customizations of macOS system shortcuts (Spotlight,
-//! Mission Control, screenshots, ...). Each entry is a numeric ID mapping to
+//! macOS stores user customizations of system shortcuts (Spotlight, Mission
+//! Control, screenshots, ...) as numeric IDs in this plist. Each entry is
 //! `{ enabled, value: { parameters: [char_code, virtual_keycode, mask], type } }`.
-//! Defaults that the user has not overridden are NOT in this file — they are
-//! hard-coded in macOS itself.
+//!
+//! macOS DEFAULTS are NOT stored in this file — they live hardcoded in the
+//! system. We therefore maintain `macos_defaults()` below and merge it with
+//! the plist contents to produce a complete picture: defaults overlaid by
+//! whatever the user has customized or disabled.
 
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, NamedKey, ScanError};
@@ -26,12 +30,67 @@ const NS_OPT: u64 = 0x0008_0000;
 const NS_CMD: u64 = 0x0010_0000;
 const NS_FN: u64 = 0x0080_0000;
 
-/// Parse a symbolichotkeys plist into the bindings it represents.
-///
-/// Disabled entries are filtered out. Entries lacking a `value` dict (which
-/// means "use macOS default") are skipped at this layer because we cannot
-/// know the default from this file alone.
+/// What the user's plist says about a particular hotkey ID.
+#[derive(Debug, Clone, Copy)]
+enum Override {
+    /// User explicitly disabled this shortcut.
+    Disabled,
+    /// User has the shortcut enabled but has not customized the combo —
+    /// macOS uses its built-in default.
+    EnabledWithDefault,
+    /// User has bound this shortcut to a specific combo.
+    Custom(KeyCombo),
+}
+
+/// Parse the plist and merge with macOS's default symbolic hotkey table to
+/// produce the final set of bindings. Disabled entries are filtered out.
 pub fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
+    let overrides = parse_overrides(path)?;
+    let defaults = macos_defaults();
+
+    let mut bindings = Vec::new();
+    let mut handled: HashSet<u32> = HashSet::new();
+
+    // Pass 1: every ID we know a default for. Apply overrides on top.
+    for (id, default_combo) in &defaults {
+        handled.insert(*id);
+        let combo = match overrides.get(id) {
+            Some(Override::Disabled) => continue,
+            Some(Override::Custom(c)) => *c,
+            Some(Override::EnabledWithDefault) | None => *default_combo,
+        };
+        bindings.push(emit(*id, combo));
+    }
+
+    // Pass 2: IDs the user has customized for which we have no default. Surface
+    // them with a generic label so unmapped customizations remain visible.
+    for (id, entry) in &overrides {
+        if handled.contains(id) {
+            continue;
+        }
+        if let Override::Custom(c) = entry {
+            bindings.push(emit(*id, *c));
+        }
+    }
+
+    bindings.sort_by_key(|b| match &b.source {
+        BindingSource::SystemSymbolicHotkey { id } => *id,
+    });
+
+    Ok(bindings)
+}
+
+fn emit(id: u32, combo: KeyCombo) -> Binding {
+    Binding {
+        combo,
+        source: BindingSource::SystemSymbolicHotkey { id },
+        label: label_for(id)
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("Symbolic hotkey #{id}")),
+    }
+}
+
+fn parse_overrides(path: &Path) -> Result<HashMap<u32, Override>, ScanError> {
     let bytes = std::fs::read(path).map_err(|source| ScanError::Io {
         path: path.to_path_buf(),
         source,
@@ -55,13 +114,11 @@ pub fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
             message: "missing AppleSymbolicHotKeys dict".into(),
         })?;
 
-    let mut bindings = Vec::new();
-
+    let mut map = HashMap::new();
     for (id_str, entry) in entries {
         let Ok(id) = id_str.parse::<u32>() else {
-            continue; // non-numeric keys aren't ours to handle
+            continue;
         };
-
         let Some(entry_dict) = entry.as_dictionary() else {
             continue;
         };
@@ -71,13 +128,12 @@ pub fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
             .and_then(|v| v.as_boolean())
             .unwrap_or(true);
         if !enabled {
+            map.insert(id, Override::Disabled);
             continue;
         }
 
         let Some(value_dict) = entry_dict.get("value").and_then(|v| v.as_dictionary()) else {
-            // Enabled but no override → uses the macOS default, which lives
-            // outside this file. Skip; future code can cross-reference a
-            // bundled defaults table.
+            map.insert(id, Override::EnabledWithDefault);
             continue;
         };
 
@@ -92,66 +148,75 @@ pub fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
         let vk = params[PARAM_VK].as_signed_integer().unwrap_or(UNSET);
         let mask = params[PARAM_MASK].as_signed_integer().unwrap_or(0);
 
-        bindings.push(Binding {
-            combo: KeyCombo {
+        // (65535, 65535, *) is Apple's "no override" placeholder; treat as
+        // enabled-with-default rather than a real custom binding.
+        if char_code == UNSET && vk == UNSET {
+            map.insert(id, Override::EnabledWithDefault);
+            continue;
+        }
+
+        map.insert(
+            id,
+            Override::Custom(KeyCombo {
                 modifiers: decode_modifiers(mask as u64),
                 key: decode_key(char_code, vk),
-            },
-            source: BindingSource::SystemSymbolicHotkey { id },
-            label: label_for(id)
-                .map(str::to_owned)
-                .unwrap_or_else(|| format!("Symbolic hotkey #{id}")),
-        });
+            }),
+        );
     }
 
-    Ok(bindings)
+    Ok(map)
 }
 
-fn decode_modifiers(mask: u64) -> Modifiers {
-    let mut m = Modifiers::empty();
-    if mask & NS_CMD != 0 {
-        m |= Modifiers::CMD;
-    }
-    if mask & NS_OPT != 0 {
-        m |= Modifiers::OPT;
-    }
-    if mask & NS_CTRL != 0 {
-        m |= Modifiers::CTRL;
-    }
-    if mask & NS_SHIFT != 0 {
-        m |= Modifiers::SHIFT;
-    }
-    if mask & NS_FN != 0 {
-        m |= Modifiers::FN;
-    }
-    m
-}
+/// macOS default bindings for symbolic hotkey IDs, hand-curated against
+/// macOS Tahoe (26.x).
+///
+/// **Maintenance** (do this once per macOS major release):
+///
+///   1. On a fresh install of the new macOS, open System Settings → Keyboard
+///      → Keyboard Shortcuts and note the default for each ID.
+///   2. Cross-reference IDs with the contents of
+///      `~/Library/Preferences/com.apple.symbolichotkeys.plist` after toggling
+///      shortcuts in System Settings (the file fills in as you interact).
+///   3. Update / add entries below; bump the version comment.
+///
+/// **Coverage** is intentionally partial — only IDs we're confident about
+/// are listed. Unknown IDs that the user customizes are still surfaced
+/// (with a generic "Symbolic hotkey #N" label) by the second pass in `scan`.
+///
+/// **Sources**: combos verified against Apple Support HT201236 (Mac keyboard
+/// shortcuts), virtual keycodes from `<HIToolbox/Events.h>`, and System
+/// Settings on a Tahoe install.
+fn macos_defaults() -> Vec<(u32, KeyCombo)> {
+    use NamedKey::*;
+    let cmd = Modifiers::CMD;
+    let shift = Modifiers::SHIFT;
+    let ctrl = Modifiers::CTRL;
+    let opt = Modifiers::OPT;
+    let combo = |m, k| KeyCombo { modifiers: m, key: k };
 
-fn decode_key(char_code: i64, vk: i64) -> Key {
-    // Virtual keycode wins for keys with a canonical NamedKey, since the vk
-    // is layout-independent while the char_code reflects the active layout.
-    if vk != UNSET && (0..=u16::MAX as i64).contains(&vk) {
-        if let Some(named) = vk_to_named(vk as u16) {
-            return Key::Named(named);
-        }
-    }
-
-    // Fall back to the printable character if Apple set one.
-    if char_code != UNSET && (0..=u32::MAX as i64).contains(&char_code) {
-        if let Some(c) = char::from_u32(char_code as u32) {
-            if !c.is_control() {
-                return Key::Char(c);
-            }
-        }
-    }
-
-    // Last resort: surface the raw vk so the caller can still see what was
-    // bound, even if we don't have a name for it.
-    if vk != UNSET && (0..=u16::MAX as i64).contains(&vk) {
-        return Key::Virtual(vk as u16);
-    }
-
-    Key::Virtual(0)
+    vec![
+        // Mission Control / Spaces
+        (32, combo(ctrl, Key::Named(Up))),
+        (33, combo(ctrl, Key::Named(Down))),
+        (79, combo(ctrl, Key::Named(Left))),
+        (81, combo(ctrl, Key::Named(Right))),
+        (118, combo(ctrl, Key::Char('1'))),
+        (119, combo(ctrl, Key::Char('2'))),
+        (120, combo(ctrl, Key::Char('3'))),
+        (121, combo(ctrl, Key::Char('4'))),
+        // Screenshots
+        (28, combo(shift | cmd, Key::Char('3'))),
+        (29, combo(ctrl | shift | cmd, Key::Char('3'))),
+        (30, combo(shift | cmd, Key::Char('4'))),
+        (31, combo(ctrl | shift | cmd, Key::Char('4'))),
+        (184, combo(shift | cmd, Key::Char('5'))),
+        // Spotlight
+        (64, combo(cmd, Key::Named(Space))),
+        (65, combo(cmd | opt, Key::Named(Space))),
+        // Input source switching
+        (60, combo(ctrl, Key::Named(Space))),
+        (61, combo(ctrl | opt, Key::Named(Space))),
+    ]
 }
 
 /// Human-readable label for a known symbolic hotkey ID, or `None` if we don't
@@ -215,6 +280,53 @@ fn label_for(id: u32) -> Option<&'static str> {
 
         _ => return None,
     })
+}
+
+fn decode_modifiers(mask: u64) -> Modifiers {
+    let mut m = Modifiers::empty();
+    if mask & NS_CMD != 0 {
+        m |= Modifiers::CMD;
+    }
+    if mask & NS_OPT != 0 {
+        m |= Modifiers::OPT;
+    }
+    if mask & NS_CTRL != 0 {
+        m |= Modifiers::CTRL;
+    }
+    if mask & NS_SHIFT != 0 {
+        m |= Modifiers::SHIFT;
+    }
+    if mask & NS_FN != 0 {
+        m |= Modifiers::FN;
+    }
+    m
+}
+
+fn decode_key(char_code: i64, vk: i64) -> Key {
+    // Virtual keycode wins for keys with a canonical NamedKey, since the vk
+    // is layout-independent while the char_code reflects the active layout.
+    if vk != UNSET && (0..=u16::MAX as i64).contains(&vk) {
+        if let Some(named) = vk_to_named(vk as u16) {
+            return Key::Named(named);
+        }
+    }
+
+    // Fall back to the printable character if Apple set one.
+    if char_code != UNSET && (0..=u32::MAX as i64).contains(&char_code) {
+        if let Some(c) = char::from_u32(char_code as u32) {
+            if !c.is_control() {
+                return Key::Char(c);
+            }
+        }
+    }
+
+    // Last resort: surface the raw vk so the caller can still see what was
+    // bound, even if we don't have a name for it.
+    if vk != UNSET && (0..=u16::MAX as i64).contains(&vk) {
+        return Key::Virtual(vk as u16);
+    }
+
+    Key::Virtual(0)
 }
 
 /// Map macOS virtual keycodes (from `<HIToolbox/Events.h>`) to `NamedKey`.
