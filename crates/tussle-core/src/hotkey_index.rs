@@ -2,8 +2,10 @@ use crate::Binding;
 
 /// Container for all discovered hotkey bindings across sources.
 ///
-/// At M1 this is an append-only list. Reverse lookup (`find_by_combo`) and
-/// conflict detection are added when later milestones introduce more sources.
+/// Currently an append-only list.
+///
+/// TODO: add reverse lookup (`find_by_combo`) and conflict detection once
+/// additional sources land and the same combo can come from multiple sources.
 #[derive(Debug, Default, Clone)]
 pub struct HotkeyIndex {
     bindings: Vec<Binding>,

@@ -8,7 +8,7 @@ and then commit them at the end — not as one big commit, not as fake
 repo's real state at that moment.
 
 A logical step = one new file's single purpose, one type/fn/module, one fix,
-one refactor, one feature slice. Not "today's work" or "M1 complete".
+one refactor, one feature slice. Not "today's work" or "a whole feature done".
 
 Exceptions, only two: (1) the change is genuinely indivisible (must compile
 together); (2) user explicitly says "commit these together".
