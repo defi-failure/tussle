@@ -73,9 +73,10 @@ pub fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
         }
     }
 
-    bindings.sort_by_key(|b| match &b.source {
-        BindingSource::SystemSymbolicHotkey { id } => *id,
-        BindingSource::AppMenuOverride { .. } => {
+    bindings.sort_by_key(|b| {
+        if let BindingSource::SystemSymbolicHotkey { id } = &b.source {
+            *id
+        } else {
             unreachable!("this parser only emits SystemSymbolicHotkey bindings")
         }
     });

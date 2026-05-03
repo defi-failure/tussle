@@ -81,6 +81,11 @@ enum SourceJson {
         bundle_id: String,
         menu_item: String,
     },
+    AppMenuItem {
+        bundle_id: String,
+        app_name: Option<String>,
+        menu_path: Vec<String>,
+    },
 }
 
 impl<'a> From<&'a Binding> for BindingJson<'a> {
@@ -99,6 +104,15 @@ impl<'a> From<&'a Binding> for BindingJson<'a> {
                 } => SourceJson::AppMenuOverride {
                     bundle_id: bundle_id.clone(),
                     menu_item: menu_item.clone(),
+                },
+                BindingSource::AppMenuItem {
+                    bundle_id,
+                    app_name,
+                    menu_path,
+                } => SourceJson::AppMenuItem {
+                    bundle_id: bundle_id.clone(),
+                    app_name: app_name.clone(),
+                    menu_path: menu_path.clone(),
                 },
             },
         }
