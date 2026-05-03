@@ -10,9 +10,35 @@
 //! whatever the user has customized or disabled.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, NamedKey, ScanError};
+
+use super::Source;
+
+/// Reads `com.apple.symbolichotkeys.plist` and merges its contents with
+/// macOS's hardcoded default table.
+#[derive(Debug, Clone)]
+pub struct SymbolicHotkeys {
+    plist_path: PathBuf,
+}
+
+impl SymbolicHotkeys {
+    /// Construct a parser pointed at the given plist path.
+    pub fn new(plist_path: PathBuf) -> Self {
+        Self { plist_path }
+    }
+}
+
+impl Source for SymbolicHotkeys {
+    fn name(&self) -> &'static str {
+        "symbolichotkeys"
+    }
+
+    fn scan(&self) -> Result<Vec<Binding>, ScanError> {
+        scan(&self.plist_path)
+    }
+}
 
 /// `parameters` array index for the printable character code, the macOS
 /// virtual keycode, and the NSEvent modifier mask, respectively.
@@ -44,7 +70,7 @@ enum Override {
 
 /// Parse the plist and merge with macOS's default symbolic hotkey table to
 /// produce the final set of bindings. Disabled entries are filtered out.
-pub fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
+fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
     let overrides = parse_overrides(path)?;
     let defaults = macos_defaults();
 

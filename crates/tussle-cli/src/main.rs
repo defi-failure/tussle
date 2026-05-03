@@ -5,8 +5,8 @@ use clap::{Parser, Subcommand};
 use serde::Serialize;
 use tabled::builder::Builder;
 use tabled::settings::Style;
-use tussle_core::sources::symbolichotkeys;
-use tussle_core::{Binding, BindingSource};
+use tussle_core::sources::symbolichotkeys::SymbolicHotkeys;
+use tussle_core::{Binding, BindingSource, Source};
 
 #[derive(Parser)]
 #[command(name = "tussle", version, about = "macOS hotkey conflict resolver")]
@@ -34,7 +34,8 @@ fn main() -> Result<()> {
 
 fn scan(as_json: bool) -> Result<()> {
     let path = system_symbolichotkeys_path()?;
-    let bindings = symbolichotkeys::scan(&path)
+    let bindings = SymbolicHotkeys::new(path.clone())
+        .scan()
         .with_context(|| format!("scanning {}", path.display()))?;
 
     if as_json {

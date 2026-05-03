@@ -5,8 +5,8 @@
 
 use std::path::PathBuf;
 
-use tussle_core::sources::symbolichotkeys;
-use tussle_core::{BindingSource, Key, KeyCombo, Modifiers, NamedKey};
+use tussle_core::sources::symbolichotkeys::SymbolicHotkeys;
+use tussle_core::{BindingSource, Key, KeyCombo, Modifiers, NamedKey, Source};
 
 fn fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -18,8 +18,9 @@ fn fixture(name: &str) -> PathBuf {
 
 #[test]
 fn parses_customized_fixture() {
-    let bindings =
-        symbolichotkeys::scan(&fixture("customized.plist")).expect("parse should succeed");
+    let bindings = SymbolicHotkeys::new(fixture("customized.plist"))
+        .scan()
+        .expect("parse should succeed");
 
     // ID 64 (Show Spotlight search) is bound to ⌘Space.
     let spotlight = bindings
