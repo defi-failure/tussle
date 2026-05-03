@@ -2,12 +2,14 @@
 //! across system, application menus, and third-party launchers.
 
 mod binding;
+mod error;
 mod hotkey_index;
 mod key;
 mod key_combo;
 mod modifiers;
 
 pub use binding::{Binding, BindingSource};
+pub use error::ScanError;
 pub use hotkey_index::HotkeyIndex;
 pub use key::{Key, NamedKey};
 pub use key_combo::KeyCombo;

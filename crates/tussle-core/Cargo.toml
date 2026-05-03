@@ -6,3 +6,4 @@ publish.workspace = true
 
 [dependencies]
 bitflags = "2"
+thiserror = "2"
