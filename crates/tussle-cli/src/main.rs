@@ -35,7 +35,7 @@ fn scan() -> Result<()> {
     }
 
     for b in &bindings {
-        println!("{:?}\t{:?}\t{}", b.combo.modifiers, b.combo.key, b.label);
+        println!("{}\t{}", b.combo, b.label);
     }
     Ok(())
 }
