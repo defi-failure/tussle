@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use tabled::builder::Builder;
+use tabled::settings::Style;
 use tussle_core::sources::symbolichotkeys;
 
 #[derive(Parser)]
@@ -34,9 +36,12 @@ fn scan() -> Result<()> {
         return Ok(());
     }
 
+    let mut builder = Builder::default();
+    builder.push_record(["Combo", "Owner", "Action"]);
     for b in &bindings {
-        println!("{}\t{}\t{}", b.combo, b.source.owner(), b.label);
+        builder.push_record([&format!("{}", b.combo), b.source.owner(), &b.label]);
     }
+    println!("{}", builder.build().with(Style::psql()));
     Ok(())
 }
 
