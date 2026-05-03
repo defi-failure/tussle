@@ -22,14 +22,25 @@ pub enum BindingSource {
     ///
     /// `id` is the symbolic hotkey numeric identifier (e.g. 64 = Spotlight).
     SystemSymbolicHotkey { id: u32 },
+
+    /// A per-app menu-item override stored in the app's
+    /// `NSUserKeyEquivalents` dictionary at
+    /// `~/Library/Preferences/<bundle_id>.plist`.
+    AppMenuOverride {
+        /// The app's bundle identifier (e.g. `"com.apple.TextEdit"`).
+        bundle_id: String,
+        /// The menu item the user remapped (e.g. `"New"`, `"Open Recent"`).
+        menu_item: String,
+    },
 }
 
 impl BindingSource {
     /// Short human-readable identifier for whoever owns this binding —
     /// answers "who took this keystroke?" not "what does it do?".
-    pub fn owner(&self) -> &'static str {
+    pub fn owner(&self) -> &str {
         match self {
             BindingSource::SystemSymbolicHotkey { .. } => "macOS",
+            BindingSource::AppMenuOverride { bundle_id, .. } => bundle_id,
         }
     }
 }
@@ -42,5 +53,14 @@ mod tests {
     fn owner_for_symbolic_hotkey_is_macos() {
         let s = BindingSource::SystemSymbolicHotkey { id: 64 };
         assert_eq!(s.owner(), "macOS");
+    }
+
+    #[test]
+    fn owner_for_app_menu_override_is_bundle_id() {
+        let s = BindingSource::AppMenuOverride {
+            bundle_id: "com.apple.TextEdit".into(),
+            menu_item: "New".into(),
+        };
+        assert_eq!(s.owner(), "com.apple.TextEdit");
     }
 }

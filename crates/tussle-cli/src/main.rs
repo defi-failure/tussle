@@ -66,7 +66,7 @@ fn system_symbolichotkeys_path() -> Result<PathBuf> {
 #[derive(Serialize)]
 struct BindingJson<'a> {
     combo: String,
-    owner: &'static str,
+    owner: &'a str,
     action: &'a str,
     source: SourceJson,
 }
@@ -74,7 +74,13 @@ struct BindingJson<'a> {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SourceJson {
-    SystemSymbolicHotkey { id: u32 },
+    SystemSymbolicHotkey {
+        id: u32,
+    },
+    AppMenuOverride {
+        bundle_id: String,
+        menu_item: String,
+    },
 }
 
 impl<'a> From<&'a Binding> for BindingJson<'a> {
@@ -87,6 +93,13 @@ impl<'a> From<&'a Binding> for BindingJson<'a> {
                 BindingSource::SystemSymbolicHotkey { id } => {
                     SourceJson::SystemSymbolicHotkey { id: *id }
                 }
+                BindingSource::AppMenuOverride {
+                    bundle_id,
+                    menu_item,
+                } => SourceJson::AppMenuOverride {
+                    bundle_id: bundle_id.clone(),
+                    menu_item: menu_item.clone(),
+                },
             },
         }
     }
