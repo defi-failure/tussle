@@ -9,4 +9,7 @@ name = "tussle"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+dirs = "6"
+tussle-core = { path = "../tussle-core" }
