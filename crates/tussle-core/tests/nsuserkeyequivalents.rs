@@ -14,7 +14,6 @@ fn fixture(name: &str) -> PathBuf {
 }
 
 #[test]
-#[ignore = "parse not yet implemented"]
 fn parses_synthetic_app_overrides() {
     let bindings =
         nsuserkeyequivalents::parse(&fixture("com.example.app.plist")).expect("parse should succeed");

@@ -19,19 +19,200 @@
 
 use std::path::Path;
 
-use crate::{Binding, ScanError};
+use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, ScanError};
 
 /// Parse a single `<bundle_id>.plist` for its `NSUserKeyEquivalents` dict.
 ///
 /// Returns an empty `Vec` (not an error) when the file has no overrides —
 /// most apps don't, so an empty result is the common case.
 pub fn parse(path: &Path) -> Result<Vec<Binding>, ScanError> {
-    let _ = path;
-    todo!("nsuserkeyequivalents parser not yet implemented")
+    let bundle_id = bundle_id_from_path(path).ok_or_else(|| ScanError::Schema {
+        path: path.to_path_buf(),
+        message: "filename has no bundle id stem".into(),
+    })?;
+
+    let bytes = std::fs::read(path).map_err(|source| ScanError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+
+    let value: plist::Value = plist::from_bytes(&bytes).map_err(|e| ScanError::Schema {
+        path: path.to_path_buf(),
+        message: format!("plist parse: {e}"),
+    })?;
+
+    let Some(root) = value.as_dictionary() else {
+        // Plists with non-dictionary roots have no NSUserKeyEquivalents.
+        return Ok(Vec::new());
+    };
+
+    let Some(equivs) = root
+        .get("NSUserKeyEquivalents")
+        .and_then(|v| v.as_dictionary())
+    else {
+        return Ok(Vec::new());
+    };
+
+    let mut bindings = Vec::new();
+    for (menu_item, value) in equivs {
+        let Some(shorthand) = value.as_string() else {
+            continue;
+        };
+        let Some(combo) = parse_keystroke(shorthand) else {
+            continue;
+        };
+        bindings.push(Binding {
+            combo,
+            source: BindingSource::AppMenuOverride {
+                bundle_id: bundle_id.clone(),
+                menu_item: menu_item.clone(),
+            },
+            label: menu_item.clone(),
+        });
+    }
+
+    bindings.sort_by(|a, b| match (&a.source, &b.source) {
+        (
+            BindingSource::AppMenuOverride { menu_item: am, .. },
+            BindingSource::AppMenuOverride { menu_item: bm, .. },
+        ) => am.cmp(bm),
+        _ => std::cmp::Ordering::Equal,
+    });
+
+    Ok(bindings)
 }
 
 /// Walk every plist under `prefs_dir` and aggregate menu-item overrides.
+///
+/// Plists that fail to read or parse are skipped (most files in the
+/// preferences directory are unrelated app preferences). Only an error
+/// reading the directory itself is propagated.
 pub fn scan(prefs_dir: &Path) -> Result<Vec<Binding>, ScanError> {
-    let _ = prefs_dir;
-    todo!("nsuserkeyequivalents directory walker not yet implemented")
+    let entries = std::fs::read_dir(prefs_dir).map_err(|source| ScanError::Io {
+        path: prefs_dir.to_path_buf(),
+        source,
+    })?;
+
+    let mut bindings = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("plist") {
+            continue;
+        }
+        if let Ok(found) = parse(&path) {
+            bindings.extend(found);
+        }
+    }
+
+    Ok(bindings)
+}
+
+fn bundle_id_from_path(path: &Path) -> Option<String> {
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .map(String::from)
+}
+
+/// Parse Apple's `NSUserKeyEquivalents` keystroke shorthand into a `KeyCombo`.
+///
+/// Modifier prefix characters in any order: `@` (cmd), `~` (opt), `$` (shift),
+/// `^` (ctrl). One trailing character names the key. Returns `None` for
+/// malformed input (no key, multiple key chars, or unrecognized prefixes).
+fn parse_keystroke(s: &str) -> Option<KeyCombo> {
+    let mut modifiers = Modifiers::empty();
+    let mut chars = s.chars().peekable();
+
+    loop {
+        match chars.peek()? {
+            '@' => modifiers |= Modifiers::CMD,
+            '~' => modifiers |= Modifiers::OPT,
+            '$' => modifiers |= Modifiers::SHIFT,
+            '^' => modifiers |= Modifiers::CTRL,
+            _ => break,
+        }
+        chars.next();
+    }
+
+    let key_char = chars.next()?;
+    if chars.next().is_some() {
+        return None;
+    }
+
+    Some(KeyCombo {
+        modifiers,
+        key: Key::Char(key_char),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_keystroke_cmd_only() {
+        let c = parse_keystroke("@n").unwrap();
+        assert_eq!(
+            c,
+            KeyCombo {
+                modifiers: Modifiers::CMD,
+                key: Key::Char('n'),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_keystroke_cmd_opt() {
+        let c = parse_keystroke("@~n").unwrap();
+        assert_eq!(
+            c,
+            KeyCombo {
+                modifiers: Modifiers::CMD | Modifiers::OPT,
+                key: Key::Char('n'),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_keystroke_all_modifiers() {
+        let c = parse_keystroke("@~$^x").unwrap();
+        assert_eq!(
+            c,
+            KeyCombo {
+                modifiers: Modifiers::CMD | Modifiers::OPT | Modifiers::SHIFT | Modifiers::CTRL,
+                key: Key::Char('x'),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_keystroke_modifier_order_is_irrelevant() {
+        assert_eq!(parse_keystroke("@$s"), parse_keystroke("$@s"));
+    }
+
+    #[test]
+    fn parse_keystroke_no_key_returns_none() {
+        assert_eq!(parse_keystroke("@~"), None);
+    }
+
+    #[test]
+    fn parse_keystroke_extra_chars_returns_none() {
+        assert_eq!(parse_keystroke("@nx"), None);
+    }
+
+    #[test]
+    fn parse_keystroke_empty_returns_none() {
+        assert_eq!(parse_keystroke(""), None);
+    }
+
+    #[test]
+    fn parse_keystroke_no_modifiers_just_key() {
+        let c = parse_keystroke("a").unwrap();
+        assert_eq!(
+            c,
+            KeyCombo {
+                modifiers: Modifiers::empty(),
+                key: Key::Char('a'),
+            }
+        );
+    }
 }
