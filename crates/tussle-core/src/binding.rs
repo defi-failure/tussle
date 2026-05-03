@@ -23,3 +23,24 @@ pub enum BindingSource {
     /// `id` is the symbolic hotkey numeric identifier (e.g. 64 = Spotlight).
     SystemSymbolicHotkey { id: u32 },
 }
+
+impl BindingSource {
+    /// Short human-readable identifier for whoever owns this binding —
+    /// answers "who took this keystroke?" not "what does it do?".
+    pub fn owner(&self) -> &'static str {
+        match self {
+            BindingSource::SystemSymbolicHotkey { .. } => "macOS",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owner_for_symbolic_hotkey_is_macos() {
+        let s = BindingSource::SystemSymbolicHotkey { id: 64 };
+        assert_eq!(s.owner(), "macOS");
+    }
+}
