@@ -7,6 +7,7 @@ mod hotkey_index;
 mod key;
 mod key_combo;
 mod modifiers;
+pub mod sources;
 
 pub use binding::{Binding, BindingSource};
 pub use error::ScanError;
