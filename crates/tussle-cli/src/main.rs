@@ -2,9 +2,11 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use serde::Serialize;
 use tabled::builder::Builder;
 use tabled::settings::Style;
 use tussle_core::sources::symbolichotkeys;
+use tussle_core::{Binding, BindingSource};
 
 #[derive(Parser)]
 #[command(name = "tussle", version, about = "macOS hotkey conflict resolver")]
@@ -16,20 +18,30 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Scan all hotkey sources and print discovered bindings.
-    Scan,
+    Scan {
+        /// Emit JSON instead of a human-readable table.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Scan => scan(),
+        Command::Scan { json } => scan(json),
     }
 }
 
-fn scan() -> Result<()> {
+fn scan(as_json: bool) -> Result<()> {
     let path = system_symbolichotkeys_path()?;
     let bindings = symbolichotkeys::scan(&path)
         .with_context(|| format!("scanning {}", path.display()))?;
+
+    if as_json {
+        let rows: Vec<BindingJson> = bindings.iter().map(BindingJson::from).collect();
+        println!("{}", serde_json::to_string_pretty(&rows)?);
+        return Ok(());
+    }
 
     if bindings.is_empty() {
         println!("(no customized system shortcuts found)");
@@ -49,4 +61,33 @@ fn system_symbolichotkeys_path() -> Result<PathBuf> {
     Ok(dirs::preference_dir()
         .context("could not locate user preferences directory")?
         .join("com.apple.symbolichotkeys.plist"))
+}
+
+#[derive(Serialize)]
+struct BindingJson<'a> {
+    combo: String,
+    owner: &'static str,
+    action: &'a str,
+    source: SourceJson,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum SourceJson {
+    SystemSymbolicHotkey { id: u32 },
+}
+
+impl<'a> From<&'a Binding> for BindingJson<'a> {
+    fn from(b: &'a Binding) -> Self {
+        Self {
+            combo: format!("{}", b.combo),
+            owner: b.source.owner(),
+            action: &b.label,
+            source: match &b.source {
+                BindingSource::SystemSymbolicHotkey { id } => {
+                    SourceJson::SystemSymbolicHotkey { id: *id }
+                }
+            },
+        }
+    }
 }
