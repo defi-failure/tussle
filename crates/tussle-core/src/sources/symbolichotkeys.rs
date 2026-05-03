@@ -98,7 +98,9 @@ pub fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
                 key: decode_key(char_code, vk),
             },
             source: BindingSource::SystemSymbolicHotkey { id },
-            label: format!("symbolichotkey #{id}"),
+            label: label_for(id)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("Symbolic hotkey #{id}")),
         });
     }
 
@@ -150,6 +152,69 @@ fn decode_key(char_code: i64, vk: i64) -> Key {
     }
 
     Key::Virtual(0)
+}
+
+/// Human-readable label for a known symbolic hotkey ID, or `None` if we don't
+/// have a mapping yet. Labels track Apple's wording in System Settings →
+/// Keyboard → Keyboard Shortcuts.
+///
+/// Coverage is partial; new IDs should be added as they show up in real
+/// fixtures rather than guessed at.
+fn label_for(id: u32) -> Option<&'static str> {
+    Some(match id {
+        // Keyboard navigation (Keyboard Access pane)
+        7 => "Move focus to the menu bar",
+        8 => "Move focus to the Dock",
+        9 => "Move focus to the active or next window",
+        10 => "Move focus to the window toolbar",
+        11 => "Move focus to the floating window",
+        12 => "Toggle keyboard access",
+        13 => "Change the way Tab moves focus",
+        27 => "Move focus to next window in application",
+        51 => "Move focus to the window drawer",
+        57 => "Move focus to the status menus",
+
+        // Screenshots
+        28 => "Save picture of screen as a file",
+        29 => "Copy picture of screen to the clipboard",
+        30 => "Save picture of selected area as a file",
+        31 => "Copy picture of selected area to the clipboard",
+        184 => "Screenshot and recording options",
+
+        // Mission Control
+        32 => "Mission Control",
+        33 => "Application windows",
+        36 => "Show Desktop",
+
+        // Spotlight
+        64 => "Show Spotlight search",
+        65 => "Show Finder search window",
+
+        // Input sources
+        60 => "Select the previous input source",
+        61 => "Select the next source in the Input menu",
+
+        // Spaces (the duplicate IDs are the regular vs. modified-arrow forms)
+        79 | 80 => "Move left a space",
+        81 | 82 => "Move right a space",
+        118 => "Switch to Desktop 1",
+        119 => "Switch to Desktop 2",
+        120 => "Switch to Desktop 3",
+        121 => "Switch to Desktop 4",
+
+        // Other system
+        52 => "Toggle Dock hiding",
+        59 => "Toggle VoiceOver",
+        160 => "Show Launchpad",
+        163 => "Show Notification Center",
+        175 => "Toggle Do Not Disturb",
+
+        // Touch Bar
+        181 => "Save picture of the Touch Bar as a file",
+        182 => "Copy picture of the Touch Bar to the clipboard",
+
+        _ => return None,
+    })
 }
 
 /// Map macOS virtual keycodes (from `<HIToolbox/Events.h>`) to `NamedKey`.

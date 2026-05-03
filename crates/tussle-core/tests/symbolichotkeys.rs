@@ -33,6 +33,7 @@ fn parses_customized_fixture() {
             key: Key::Named(NamedKey::Space),
         }
     );
+    assert_eq!(spotlight.label, "Show Spotlight search");
 
     // ID 65 (Show Finder search window) is bound to ⌥⌘Space.
     let finder_search = bindings
@@ -46,6 +47,7 @@ fn parses_customized_fixture() {
             key: Key::Named(NamedKey::Space),
         }
     );
+    assert_eq!(finder_search.label, "Show Finder search window");
 
     // Disabled entries (e.g. ID 17, ID 22) must NOT appear in the output.
     for disabled_id in [17u32, 18, 19, 20, 21, 22, 23, 24, 25, 26] {
