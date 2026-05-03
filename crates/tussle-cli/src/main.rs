@@ -1,10 +1,10 @@
-use std::path::PathBuf;
-
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use tabled::builder::Builder;
 use tabled::settings::Style;
+use tussle_core::sources::accessibility::{self, Accessibility};
+use tussle_core::sources::nsuserkeyequivalents::AppMenuOverrides;
 use tussle_core::sources::symbolichotkeys::SymbolicHotkeys;
 use tussle_core::{Binding, BindingSource, Source};
 
@@ -33,10 +33,23 @@ fn main() -> Result<()> {
 }
 
 fn scan(as_json: bool) -> Result<()> {
-    let path = system_symbolichotkeys_path()?;
-    let bindings = SymbolicHotkeys::new(path.clone())
-        .scan()
-        .with_context(|| format!("scanning {}", path.display()))?;
+    let sources = default_sources()?;
+
+    if !accessibility::is_trusted() {
+        eprintln!(
+            "note: tussle does not currently have Accessibility permission, \
+             so app menu shortcuts will be missing. Grant access in \
+             System Settings → Privacy & Security → Accessibility, then re-run."
+        );
+    }
+
+    let mut bindings: Vec<Binding> = Vec::new();
+    for src in &sources {
+        match src.scan() {
+            Ok(found) => bindings.extend(found),
+            Err(e) => eprintln!("{}: {:#}", src.name(), e),
+        }
+    }
 
     if as_json {
         let rows: Vec<BindingJson> = bindings.iter().map(BindingJson::from).collect();
@@ -45,7 +58,7 @@ fn scan(as_json: bool) -> Result<()> {
     }
 
     if bindings.is_empty() {
-        println!("(no customized system shortcuts found)");
+        println!("(no bindings found)");
         return Ok(());
     }
 
@@ -58,10 +71,21 @@ fn scan(as_json: bool) -> Result<()> {
     Ok(())
 }
 
-fn system_symbolichotkeys_path() -> Result<PathBuf> {
-    Ok(dirs::preference_dir()
-        .context("could not locate user preferences directory")?
-        .join("com.apple.symbolichotkeys.plist"))
+/// Build the default macOS source set.
+///
+/// Each source is constructed with paths/configuration the CLI looks up via
+/// `dirs`; `tussle-core` itself stays filesystem-agnostic.
+fn default_sources() -> Result<Vec<Box<dyn Source>>> {
+    let prefs = dirs::preference_dir()
+        .context("could not locate user preferences directory")?;
+
+    Ok(vec![
+        Box::new(SymbolicHotkeys::new(
+            prefs.join("com.apple.symbolichotkeys.plist"),
+        )),
+        Box::new(AppMenuOverrides::new(prefs.clone())),
+        Box::new(Accessibility),
+    ])
 }
 
 #[derive(Serialize)]
