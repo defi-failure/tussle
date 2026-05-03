@@ -1,4 +1,3 @@
-use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -25,21 +24,24 @@ enum Command {
         json: bool,
 
         /// How to render key combos in non-JSON output.
-        #[arg(long, value_enum, default_value_t = KeyStyle::Auto)]
+        #[arg(long, value_enum, default_value_t = KeyStyle::Names)]
         keys: KeyStyle,
     },
 }
 
 /// How key combos are rendered in human-readable output.
+///
+/// Default is `names` because terminal fonts often render the macOS keyboard
+/// symbols (⌘⌥⌃⇧⎋⏎...) at uneven widths, breaking column alignment and
+/// readability. `symbols` and `both` remain available for users with fonts
+/// that handle them well (SF Mono, Nerd Fonts, etc.).
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum KeyStyle {
-    /// Symbols when stdout is a terminal, names otherwise.
-    Auto,
-    /// Unicode symbols (⌘⇧3).
-    Symbols,
-    /// Lowercase names (cmd+shift+3).
+    /// Lowercase names: `cmd+shift+3`.
     Names,
-    /// Both: "⌘⇧3 (shift+cmd+3)".
+    /// Unicode symbols: `⌘⇧3`. May render unevenly in some terminal fonts.
+    Symbols,
+    /// Both forms: `⌘⇧3 (shift+cmd+3)`.
     Both,
 }
 
@@ -66,11 +68,10 @@ fn scan(as_json: bool, keys: KeyStyle) -> Result<()> {
         return Ok(());
     }
 
-    let style = resolve_style(keys);
     let mut builder = Builder::default();
     builder.push_record(["Combo", "Owner", "Action"]);
     for b in &bindings {
-        builder.push_record([&render_combo(&b.combo, style), b.source.owner(), &b.label]);
+        builder.push_record([&render_combo(&b.combo, keys), b.source.owner(), &b.label]);
     }
     println!("{}", builder.build().with(Style::psql()));
     Ok(())
@@ -82,26 +83,11 @@ fn system_symbolichotkeys_path() -> Result<PathBuf> {
         .join("com.apple.symbolichotkeys.plist"))
 }
 
-/// Resolve `Auto` to a concrete style based on whether stdout is a terminal.
-fn resolve_style(style: KeyStyle) -> KeyStyle {
-    match style {
-        KeyStyle::Auto => {
-            if std::io::stdout().is_terminal() {
-                KeyStyle::Symbols
-            } else {
-                KeyStyle::Names
-            }
-        }
-        explicit => explicit,
-    }
-}
-
 fn render_combo(c: &KeyCombo, style: KeyStyle) -> String {
     match style {
-        KeyStyle::Symbols => combo_symbols(c),
         KeyStyle::Names => format!("{c}"),
+        KeyStyle::Symbols => combo_symbols(c),
         KeyStyle::Both => format!("{} ({})", combo_symbols(c), c),
-        KeyStyle::Auto => unreachable!("resolve_style replaces Auto"),
     }
 }
 
