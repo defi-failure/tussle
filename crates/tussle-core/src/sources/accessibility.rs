@@ -10,17 +10,29 @@
 
 use crate::{Binding, ScanError};
 
-/// Walk every running app's menu hierarchy and collect menu-item bindings.
+use super::Source;
+
+/// Source backed by the macOS Accessibility API.
 ///
-/// On non-macOS platforms this is a no-op returning an empty `Vec`.
-pub fn scan() -> Result<Vec<Binding>, ScanError> {
-    #[cfg(target_os = "macos")]
-    {
-        platform::scan()
+/// Has no configuration (paths come from the OS at scan time), so it's a
+/// unit struct — `Accessibility` is the entire value.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Accessibility;
+
+impl Source for Accessibility {
+    fn name(&self) -> &'static str {
+        "accessibility"
     }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(Vec::new())
+
+    fn scan(&self) -> Result<Vec<Binding>, ScanError> {
+        #[cfg(target_os = "macos")]
+        {
+            platform::scan()
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Ok(Vec::new())
+        }
     }
 }
 
