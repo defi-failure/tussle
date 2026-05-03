@@ -17,7 +17,6 @@ fn fixture(name: &str) -> PathBuf {
 }
 
 #[test]
-#[ignore = "scan not yet implemented"]
 fn parses_customized_fixture() {
     let bindings =
         symbolichotkeys::scan(&fixture("customized.plist")).expect("parse should succeed");
