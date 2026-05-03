@@ -1,0 +1,8 @@
+# Build artifacts
+/target
+
+# Local-only files (CLAUDE.local.md, docs/*.local.md, etc.)
+*.local.md
+
+# macOS
+.DS_Store
