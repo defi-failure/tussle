@@ -13,9 +13,37 @@
 //!
 //! followed by the literal key character. So `@~n` denotes ⌘⌥N.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, ScanError};
+
+use super::Source;
+
+/// Walks every plist in a preferences directory looking for
+/// `NSUserKeyEquivalents` overrides — the per-app menu shortcut customizations
+/// that the user set via System Settings → Keyboard → App Shortcuts.
+#[derive(Debug, Clone)]
+pub struct AppMenuOverrides {
+    prefs_dir: PathBuf,
+}
+
+impl AppMenuOverrides {
+    /// Construct a source that walks the given preferences directory.
+    /// Typically `~/Library/Preferences`, but tests pass a fixture root.
+    pub fn new(prefs_dir: PathBuf) -> Self {
+        Self { prefs_dir }
+    }
+}
+
+impl Source for AppMenuOverrides {
+    fn name(&self) -> &'static str {
+        "nsuserkeyequivalents"
+    }
+
+    fn scan(&self) -> Result<Vec<Binding>, ScanError> {
+        scan(&self.prefs_dir)
+    }
+}
 
 /// Parse a single `<bundle_id>.plist` for its `NSUserKeyEquivalents` dict.
 ///
@@ -83,7 +111,7 @@ pub fn parse(path: &Path) -> Result<Vec<Binding>, ScanError> {
 /// Plists that fail to read or parse are skipped (most files in the
 /// preferences directory are unrelated app preferences). Only an error
 /// reading the directory itself is propagated.
-pub fn scan(prefs_dir: &Path) -> Result<Vec<Binding>, ScanError> {
+fn scan(prefs_dir: &Path) -> Result<Vec<Binding>, ScanError> {
     let entries = std::fs::read_dir(prefs_dir).map_err(|source| ScanError::Io {
         path: prefs_dir.to_path_buf(),
         source,
