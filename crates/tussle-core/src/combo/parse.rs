@@ -2,6 +2,47 @@
 
 use super::{ComboParseError, Key, KeyCombo, Modifiers, NamedKey};
 
+/// A single combo "token" for partial-match queries: either a modifier
+/// (`cmd`, `shift`, …) or a key (`space`, `f1`, `a`).
+///
+/// Used by callers that want to ask "does this combo contain X?" without
+/// caring whether X is on the modifier side or the key side. `ComboToken`
+/// shares the same alias table and case-insensitivity rules as
+/// [`KeyCombo::parse`], so user-facing input like `Command` and `cmd` both
+/// match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ComboToken {
+    Modifier(Modifiers),
+    Key(Key),
+}
+
+impl ComboToken {
+    /// Parse a single token. Tries modifier aliases first, then falls back
+    /// to the key parser (named keys, then single-character).
+    pub fn parse(s: &str) -> Result<Self, ComboParseError> {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            return Err(ComboParseError::Empty);
+        }
+        let lower = trimmed.to_ascii_lowercase();
+        if let Ok(m) = parse_modifier(&lower) {
+            return Ok(ComboToken::Modifier(m));
+        }
+        let key = parse_key(trimmed)?;
+        Ok(ComboToken::Key(key))
+    }
+
+    /// Whether `combo` includes this token. For modifier tokens it's
+    /// `combo.modifiers.contains(...)`; for key tokens it's `combo.key ==
+    /// ...`.
+    pub fn matches(&self, combo: &KeyCombo) -> bool {
+        match self {
+            ComboToken::Modifier(m) => combo.modifiers.contains(*m),
+            ComboToken::Key(k) => combo.key == *k,
+        }
+    }
+}
+
 impl KeyCombo {
     /// Parse a textual combo such as `cmd+opt+b`, `shift+f1`, or `escape`.
     ///
@@ -181,5 +222,94 @@ mod tests {
             KeyCombo::parse("cmd+ab"),
             Err(ComboParseError::UnknownKey(_))
         ));
+    }
+
+    mod combo_token {
+        use super::*;
+
+        #[test]
+        fn parse_modifier_aliases() {
+            assert_eq!(
+                ComboToken::parse("cmd").unwrap(),
+                ComboToken::Modifier(Modifiers::CMD)
+            );
+            assert_eq!(
+                ComboToken::parse("Command").unwrap(),
+                ComboToken::Modifier(Modifiers::CMD)
+            );
+            assert_eq!(
+                ComboToken::parse("ALT").unwrap(),
+                ComboToken::Modifier(Modifiers::OPT)
+            );
+            assert_eq!(
+                ComboToken::parse("globe").unwrap(),
+                ComboToken::Modifier(Modifiers::FN)
+            );
+        }
+
+        #[test]
+        fn parse_named_key() {
+            assert_eq!(
+                ComboToken::parse("space").unwrap(),
+                ComboToken::Key(Key::Named(NamedKey::Space))
+            );
+            assert_eq!(
+                ComboToken::parse("F1").unwrap(),
+                ComboToken::Key(Key::Named(NamedKey::F1))
+            );
+            assert_eq!(
+                ComboToken::parse("ESC").unwrap(),
+                ComboToken::Key(Key::Named(NamedKey::Escape))
+            );
+        }
+
+        #[test]
+        fn parse_single_char_key() {
+            assert_eq!(
+                ComboToken::parse("a").unwrap(),
+                ComboToken::Key(Key::Char('a'))
+            );
+            assert_eq!(
+                ComboToken::parse("A").unwrap(),
+                ComboToken::Key(Key::Char('a'))
+            );
+            assert_eq!(
+                ComboToken::parse("3").unwrap(),
+                ComboToken::Key(Key::Char('3'))
+            );
+        }
+
+        #[test]
+        fn parse_rejects_empty_and_unknown() {
+            assert!(ComboToken::parse("").is_err());
+            assert!(ComboToken::parse("   ").is_err());
+            assert!(ComboToken::parse("notakey").is_err());
+        }
+
+        #[test]
+        fn matches_modifier_token() {
+            let cmd_a = KeyCombo {
+                modifiers: Modifiers::CMD,
+                key: Key::Char('a'),
+            };
+            let shift_cmd_a = KeyCombo {
+                modifiers: Modifiers::CMD | Modifiers::SHIFT,
+                key: Key::Char('a'),
+            };
+            assert!(ComboToken::Modifier(Modifiers::CMD).matches(&cmd_a));
+            assert!(!ComboToken::Modifier(Modifiers::SHIFT).matches(&cmd_a));
+            assert!(ComboToken::Modifier(Modifiers::SHIFT).matches(&shift_cmd_a));
+        }
+
+        #[test]
+        fn matches_key_token() {
+            let cmd_space = KeyCombo {
+                modifiers: Modifiers::CMD,
+                key: Key::Named(NamedKey::Space),
+            };
+            assert!(ComboToken::Key(Key::Named(NamedKey::Space)).matches(&cmd_space));
+            assert!(!ComboToken::Key(Key::Named(NamedKey::F1)).matches(&cmd_space));
+            assert!(!ComboToken::Key(Key::Char('a')).matches(&cmd_space));
+        }
     }
 }

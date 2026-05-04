@@ -8,6 +8,7 @@ mod vk;
 
 pub use key::{Key, NamedKey};
 pub use modifiers::Modifiers;
+pub use parse::ComboToken;
 
 pub(crate) use vk::vk_to_named;
 
