@@ -5,8 +5,21 @@ mod output;
 mod sources;
 
 use anyhow::Result;
-use clap::{ArgAction, Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use tracing_subscriber::EnvFilter;
+
+/// How `tussle scan` orders the rows it prints. Sort key is also the
+/// "group" — equal values land next to each other, so e.g. `Combo` makes
+/// any combo bound by more than one source visible at a glance.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub(super) enum GroupBy {
+    /// Group by combo string. Same combo across multiple owners stacks
+    /// contiguously — the natural "is anything conflicting?" view.
+    Combo,
+    /// Group by owner. Each app's bindings appear together — the natural
+    /// "what does X have?" view.
+    Owner,
+}
 
 #[derive(Parser)]
 #[command(name = "tussle", version, about = "macOS hotkey conflict resolver")]
@@ -59,6 +72,11 @@ enum Command {
         /// than scanning everything and filtering afterward.
         #[arg(long, value_name = "NAME", action = ArgAction::Append)]
         app: Vec<String>,
+
+        /// Sort/group the output. Default `combo` stacks every owner of
+        /// the same combo together (good for spotting conflicts).
+        #[arg(long, value_enum, value_name = "KEY", default_value_t = GroupBy::Combo)]
+        group_by: GroupBy,
     },
     /// Look up which sources own a key combination.
     Who {
@@ -81,7 +99,8 @@ pub fn run() -> Result<()> {
             json,
             key,
             app,
-        } => commands::scan::scan(json, cli.ax_timeout, cli.ax_concurrency, key, app),
+            group_by,
+        } => commands::scan::scan(json, cli.ax_timeout, cli.ax_concurrency, key, app, group_by),
         Command::Who { combo, json } => {
             commands::who::who(combo, json, cli.ax_timeout, cli.ax_concurrency)
         }

@@ -5,6 +5,7 @@ use tabled::builder::Builder;
 use tabled::settings::Style;
 use tussle_core::{Binding, ComboToken};
 
+use crate::cli::GroupBy;
 use crate::cli::output::emit_json;
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
@@ -14,6 +15,7 @@ pub fn scan(
     ax_concurrency: usize,
     key_filter: Vec<String>,
     app_filter: Vec<String>,
+    group_by: GroupBy,
 ) -> Result<()> {
     let started = std::time::Instant::now();
 
@@ -58,6 +60,28 @@ pub fn scan(
 
     if !key_matchers.is_empty() {
         bindings.retain(|b| key_matchers.iter().any(|m| m.matches(&b.combo)));
+    }
+
+    // Stable sort by the chosen group key; tie-break by the other axis so
+    // each group is internally ordered too. Lexicographic on the rendered
+    // combo is enough for "same combo lands together" — exact ordering
+    // across groups isn't load-bearing.
+    match group_by {
+        GroupBy::Combo => {
+            bindings.sort_by(|a, b| {
+                format!("{}", a.combo)
+                    .cmp(&format!("{}", b.combo))
+                    .then_with(|| a.source.owner().cmp(b.source.owner()))
+            });
+        }
+        GroupBy::Owner => {
+            bindings.sort_by(|a, b| {
+                a.source
+                    .owner()
+                    .cmp(b.source.owner())
+                    .then_with(|| format!("{}", a.combo).cmp(&format!("{}", b.combo)))
+            });
+        }
     }
 
     tracing::info!(
