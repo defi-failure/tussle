@@ -156,7 +156,7 @@ fn default_sources() -> Result<Vec<Box<dyn Source>>> {
             prefs.join("com.apple.symbolichotkeys.plist"),
         )),
         Box::new(AppMenuOverrides::new(prefs.clone())),
-        Box::new(Accessibility),
+        Box::new(Accessibility::default()),
     ])
 }
 

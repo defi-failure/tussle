@@ -13,11 +13,27 @@ use crate::{Binding, ScanError};
 use super::Source;
 
 /// Source backed by the macOS Accessibility API.
-///
-/// Has no configuration (paths come from the OS at scan time), so it's a
-/// unit struct — `Accessibility` is the entire value.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Accessibility;
+#[derive(Debug, Clone, Copy)]
+pub struct Accessibility {
+    /// Per-app `AXUIElementSetMessagingTimeout`, in seconds. Values `<= 0`
+    /// leave the system default in place. Tight values (e.g. 1.0) prevent a
+    /// single non-responsive app from stalling the whole scan.
+    pub messaging_timeout: f32,
+}
+
+impl Default for Accessibility {
+    fn default() -> Self {
+        Self {
+            messaging_timeout: 1.0,
+        }
+    }
+}
+
+impl Accessibility {
+    pub fn new(messaging_timeout: f32) -> Self {
+        Self { messaging_timeout }
+    }
+}
 
 impl Source for Accessibility {
     fn name(&self) -> &'static str {
@@ -27,7 +43,7 @@ impl Source for Accessibility {
     fn scan(&self) -> Result<Vec<Binding>, ScanError> {
         #[cfg(target_os = "macos")]
         {
-            platform::scan()
+            platform::scan(self.messaging_timeout)
         }
         #[cfg(not(target_os = "macos"))]
         {
@@ -57,8 +73,9 @@ mod platform {
 
     use accessibility_sys::{
         AXError, AXUIElementCopyAttributeValue, AXUIElementCreateApplication, AXUIElementRef,
-        kAXChildrenAttribute, kAXErrorSuccess, kAXMenuBarAttribute, kAXMenuItemCmdCharAttribute,
-        kAXMenuItemCmdModifiersAttribute, kAXTitleAttribute,
+        AXUIElementSetMessagingTimeout, kAXChildrenAttribute, kAXErrorSuccess,
+        kAXMenuBarAttribute, kAXMenuItemCmdCharAttribute, kAXMenuItemCmdModifiersAttribute,
+        kAXTitleAttribute,
     };
     use core_foundation::array::CFArray;
     use core_foundation::base::{CFTypeRef, TCFType};
@@ -71,14 +88,14 @@ mod platform {
     /// Hard cap on menu recursion depth to defend against pathological apps.
     const MAX_MENU_DEPTH: usize = 16;
 
-    pub fn scan() -> Result<Vec<Binding>, ScanError> {
+    pub fn scan(messaging_timeout: f32) -> Result<Vec<Binding>, ScanError> {
         if !is_trusted() {
             return Ok(Vec::new());
         }
 
         let mut bindings = Vec::new();
         for app in list_running_apps() {
-            bindings.extend(walk_app_menus(&app));
+            bindings.extend(walk_app_menus(&app, messaging_timeout));
         }
         Ok(bindings)
     }
@@ -114,10 +131,16 @@ mod platform {
         out
     }
 
-    fn walk_app_menus(app: &RunningApp) -> Vec<Binding> {
+    fn walk_app_menus(app: &RunningApp, messaging_timeout: f32) -> Vec<Binding> {
         let element = unsafe { AXUIElementCreateApplication(app.pid) };
         if element.is_null() {
             return Vec::new();
+        }
+
+        // Per-app timeout. Set on the application element propagates to
+        // all child elements queried through it.
+        if messaging_timeout > 0.0 {
+            unsafe { AXUIElementSetMessagingTimeout(element, messaging_timeout) };
         }
 
         let mut bindings = Vec::new();
