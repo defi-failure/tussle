@@ -132,9 +132,7 @@ fn scan(prefs_dir: &Path) -> Result<Vec<Binding>, ScanError> {
 }
 
 fn bundle_id_from_path(path: &Path) -> Option<String> {
-    path.file_stem()
-        .and_then(|s| s.to_str())
-        .map(String::from)
+    path.file_stem().and_then(|s| s.to_str()).map(String::from)
 }
 
 /// Parse Apple's `NSUserKeyEquivalents` keystroke shorthand into a `KeyCombo`.

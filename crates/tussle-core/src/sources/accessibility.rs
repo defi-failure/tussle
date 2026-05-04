@@ -56,9 +56,9 @@ mod platform {
     use std::ptr;
 
     use accessibility_sys::{
+        AXError, AXUIElementCopyAttributeValue, AXUIElementCreateApplication, AXUIElementRef,
         kAXChildrenAttribute, kAXErrorSuccess, kAXMenuBarAttribute, kAXMenuItemCmdCharAttribute,
-        kAXMenuItemCmdModifiersAttribute, kAXTitleAttribute, AXError, AXUIElementCopyAttributeValue,
-        AXUIElementCreateApplication, AXUIElementRef,
+        kAXMenuItemCmdModifiersAttribute, kAXTitleAttribute,
     };
     use core_foundation::array::CFArray;
     use core_foundation::base::{CFTypeRef, TCFType};

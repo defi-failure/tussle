@@ -225,7 +225,10 @@ fn macos_defaults() -> Vec<(u32, KeyCombo)> {
     let shift = Modifiers::SHIFT;
     let ctrl = Modifiers::CTRL;
     let opt = Modifiers::OPT;
-    let combo = |m, k| KeyCombo { modifiers: m, key: k };
+    let combo = |m, k| KeyCombo {
+        modifiers: m,
+        key: k,
+    };
 
     vec![
         // Mission Control / Spaces
@@ -361,4 +364,3 @@ fn decode_key(char_code: i64, vk: i64) -> Key {
 
     Key::Virtual(0)
 }
-

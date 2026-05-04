@@ -15,8 +15,8 @@ fn fixture(name: &str) -> PathBuf {
 
 #[test]
 fn parses_synthetic_app_overrides() {
-    let bindings =
-        nsuserkeyequivalents::parse(&fixture("com.example.app.plist")).expect("parse should succeed");
+    let bindings = nsuserkeyequivalents::parse(&fixture("com.example.app.plist"))
+        .expect("parse should succeed");
 
     // The fixture has four `NSUserKeyEquivalents` entries plus an unrelated
     // setting at the top level which must be ignored.
@@ -25,10 +25,12 @@ fn parses_synthetic_app_overrides() {
     // "New" → @~n → ⌘⌥N
     let new = bindings
         .iter()
-        .find(|b| matches!(
-            &b.source,
-            BindingSource::AppMenuOverride { menu_item, .. } if menu_item == "New"
-        ))
+        .find(|b| {
+            matches!(
+                &b.source,
+                BindingSource::AppMenuOverride { menu_item, .. } if menu_item == "New"
+            )
+        })
         .expect("'New' override should be parsed");
     assert_eq!(
         new.combo,
@@ -46,10 +48,12 @@ fn parses_synthetic_app_overrides() {
     // "Save All" → @$s → ⌘⇧S
     let save_all = bindings
         .iter()
-        .find(|b| matches!(
-            &b.source,
-            BindingSource::AppMenuOverride { menu_item, .. } if menu_item == "Save All"
-        ))
+        .find(|b| {
+            matches!(
+                &b.source,
+                BindingSource::AppMenuOverride { menu_item, .. } if menu_item == "Save All"
+            )
+        })
         .expect("'Save All' override should be parsed");
     assert_eq!(
         save_all.combo,
@@ -62,10 +66,12 @@ fn parses_synthetic_app_overrides() {
     // "Open Recent" → @^o → ⌘⌃O
     let open_recent = bindings
         .iter()
-        .find(|b| matches!(
-            &b.source,
-            BindingSource::AppMenuOverride { menu_item, .. } if menu_item == "Open Recent"
-        ))
+        .find(|b| {
+            matches!(
+                &b.source,
+                BindingSource::AppMenuOverride { menu_item, .. } if menu_item == "Open Recent"
+            )
+        })
         .expect("'Open Recent' override should be parsed");
     assert_eq!(
         open_recent.combo,
@@ -78,10 +84,12 @@ fn parses_synthetic_app_overrides() {
     // "Reload" → @r → ⌘R (no extra modifiers)
     let reload = bindings
         .iter()
-        .find(|b| matches!(
-            &b.source,
-            BindingSource::AppMenuOverride { menu_item, .. } if menu_item == "Reload"
-        ))
+        .find(|b| {
+            matches!(
+                &b.source,
+                BindingSource::AppMenuOverride { menu_item, .. } if menu_item == "Reload"
+            )
+        })
         .expect("'Reload' override should be parsed");
     assert_eq!(
         reload.combo,

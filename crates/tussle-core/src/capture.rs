@@ -28,7 +28,9 @@ where
     #[cfg(not(target_os = "macos"))]
     {
         let _ = on_modifiers_changed;
-        Err(capture_error("interactive capture is only supported on macOS"))
+        Err(capture_error(
+            "interactive capture is only supported on macOS",
+        ))
     }
 }
 
@@ -124,8 +126,7 @@ mod platform {
                 }
 
                 // KeyDown of a non-modifier key — finalize and exit.
-                let vk =
-                    event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
+                let vk = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
                 let combo = KeyCombo {
                     modifiers,
                     key: Key::from_vk(vk),
@@ -153,7 +154,9 @@ mod platform {
 
         CFRunLoop::run_current();
 
-        let captured = captured.lock().map_err(|_| capture_error("lock poisoned"))?;
+        let captured = captured
+            .lock()
+            .map_err(|_| capture_error("lock poisoned"))?;
         captured
             .clone()
             .ok_or_else(|| capture_error("event tap exited without capturing a key"))
@@ -178,5 +181,4 @@ mod platform {
         }
         m
     }
-
 }

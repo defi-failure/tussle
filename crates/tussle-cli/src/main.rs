@@ -85,9 +85,7 @@ fn scan(as_json: bool) -> Result<()> {
 
 fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
     let combo = match combo_arg {
-        Some(text) => {
-            KeyCombo::parse(&text).with_context(|| format!("parsing combo {text:?}"))?
-        }
+        Some(text) => KeyCombo::parse(&text).with_context(|| format!("parsing combo {text:?}"))?,
         None => {
             eprintln!("Press the hotkey to look up (Ctrl+C to abort)...");
             let combo = capture::capture_one_combo(|mods| {
@@ -151,8 +149,7 @@ fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
 /// Each source is constructed with paths/configuration the CLI looks up via
 /// `dirs`; `tussle-core` itself stays filesystem-agnostic.
 fn default_sources() -> Result<Vec<Box<dyn Source>>> {
-    let prefs = dirs::preference_dir()
-        .context("could not locate user preferences directory")?;
+    let prefs = dirs::preference_dir().context("could not locate user preferences directory")?;
 
     Ok(vec![
         Box::new(SymbolicHotkeys::new(

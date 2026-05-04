@@ -190,8 +190,8 @@ impl Key {
             // C0 control chars (AppKit/NSText.h).
             '\u{001B}' => Key::Named(NamedKey::Escape), //          ESC
             '\u{000D}' | '\u{0003}' => Key::Named(NamedKey::Return), // NSReturnCharacter / NSEnterCharacter
-            '\u{0009}' => Key::Named(NamedKey::Tab), //             NSTabCharacter
-            '\u{0008}' => Key::Named(NamedKey::Backspace), //       NSBackspaceCharacter
+            '\u{0009}' => Key::Named(NamedKey::Tab),                 //             NSTabCharacter
+            '\u{0008}' => Key::Named(NamedKey::Backspace),           //       NSBackspaceCharacter
             '\u{007F}' => Key::Named(NamedKey::Backspace), //       NSDeleteCharacter (main "delete" key on Apple kbds)
 
             // NSText PUA function-key constants (AppKit/NSEvent.h).
@@ -221,11 +221,11 @@ impl Key {
             '\u{F717}' => Key::Named(NamedKey::F20), //             NSF20FunctionKey
             '\u{F727}' => Key::Named(NamedKey::Insert), //          NSInsertFunctionKey
             '\u{F728}' => Key::Named(NamedKey::Delete), //          NSDeleteFunctionKey (forward-delete)
-            '\u{F729}' => Key::Named(NamedKey::Home), //            NSHomeFunctionKey
-            '\u{F72B}' => Key::Named(NamedKey::End), //             NSEndFunctionKey
+            '\u{F729}' => Key::Named(NamedKey::Home),   //            NSHomeFunctionKey
+            '\u{F72B}' => Key::Named(NamedKey::End),    //             NSEndFunctionKey
             '\u{F72C}' => Key::Named(NamedKey::PageUp), //          NSPageUpFunctionKey
             '\u{F72D}' => Key::Named(NamedKey::PageDown), //        NSPageDownFunctionKey
-            '\u{F746}' => Key::Named(NamedKey::Help), //            NSHelpFunctionKey
+            '\u{F746}' => Key::Named(NamedKey::Help),   //            NSHelpFunctionKey
 
             other => Key::Char(other.to_ascii_lowercase()),
         }
@@ -259,14 +259,14 @@ impl Key {
 /// `Carbon/HIToolbox.framework/Headers/Events.h` (kVK_* constants).
 pub(crate) fn vk_to_named(vk: u16) -> Option<NamedKey> {
     let n = match vk {
-        0x31 => NamedKey::Space, //          kVK_Space
-        0x24 => NamedKey::Return, //         kVK_Return
-        0x30 => NamedKey::Tab, //            kVK_Tab
-        0x35 => NamedKey::Escape, //         kVK_Escape
+        0x31 => NamedKey::Space,     //          kVK_Space
+        0x24 => NamedKey::Return,    //         kVK_Return
+        0x30 => NamedKey::Tab,       //            kVK_Tab
+        0x35 => NamedKey::Escape,    //         kVK_Escape
         0x33 => NamedKey::Backspace, //      kVK_Delete (= main delete key, semantically Backspace)
-        0x75 => NamedKey::Delete, //         kVK_ForwardDelete
-        0x72 => NamedKey::Help, //           kVK_Help
-        0x7A => NamedKey::F1, //             kVK_F1
+        0x75 => NamedKey::Delete,    //         kVK_ForwardDelete
+        0x72 => NamedKey::Help,      //           kVK_Help
+        0x7A => NamedKey::F1,        //             kVK_F1
         0x78 => NamedKey::F2,
         0x63 => NamedKey::F3,
         0x76 => NamedKey::F4,
@@ -286,14 +286,14 @@ pub(crate) fn vk_to_named(vk: u16) -> Option<NamedKey> {
         0x4F => NamedKey::F18,
         0x50 => NamedKey::F19,
         0x5A => NamedKey::F20,
-        0x7E => NamedKey::Up, //             kVK_UpArrow
-        0x7D => NamedKey::Down, //           kVK_DownArrow
-        0x7B => NamedKey::Left, //           kVK_LeftArrow
-        0x7C => NamedKey::Right, //          kVK_RightArrow
-        0x74 => NamedKey::PageUp, //         kVK_PageUp
+        0x7E => NamedKey::Up,       //             kVK_UpArrow
+        0x7D => NamedKey::Down,     //           kVK_DownArrow
+        0x7B => NamedKey::Left,     //           kVK_LeftArrow
+        0x7C => NamedKey::Right,    //          kVK_RightArrow
+        0x74 => NamedKey::PageUp,   //         kVK_PageUp
         0x79 => NamedKey::PageDown, //       kVK_PageDown
-        0x73 => NamedKey::Home, //           kVK_Home
-        0x77 => NamedKey::End, //            kVK_End
+        0x73 => NamedKey::Home,     //           kVK_Home
+        0x77 => NamedKey::End,      //            kVK_End
         _ => return None,
     };
     Some(n)
@@ -303,19 +303,52 @@ pub(crate) fn vk_to_named(vk: u16) -> Option<NamedKey> {
 /// Source: `HIToolbox/Events.h` `kVK_ANSI_*` constants.
 pub(crate) fn vk_to_ansi_char(vk: u16) -> Option<char> {
     Some(match vk {
-        0x00 => 'a', 0x01 => 's', 0x02 => 'd', 0x03 => 'f',
-        0x04 => 'h', 0x05 => 'g', 0x06 => 'z', 0x07 => 'x',
-        0x08 => 'c', 0x09 => 'v', 0x0B => 'b', 0x0C => 'q',
-        0x0D => 'w', 0x0E => 'e', 0x0F => 'r', 0x10 => 'y',
+        0x00 => 'a',
+        0x01 => 's',
+        0x02 => 'd',
+        0x03 => 'f',
+        0x04 => 'h',
+        0x05 => 'g',
+        0x06 => 'z',
+        0x07 => 'x',
+        0x08 => 'c',
+        0x09 => 'v',
+        0x0B => 'b',
+        0x0C => 'q',
+        0x0D => 'w',
+        0x0E => 'e',
+        0x0F => 'r',
+        0x10 => 'y',
         0x11 => 't',
-        0x12 => '1', 0x13 => '2', 0x14 => '3', 0x15 => '4',
-        0x17 => '5', 0x16 => '6', 0x1A => '7', 0x1C => '8',
-        0x19 => '9', 0x1D => '0',
-        0x18 => '=', 0x1B => '-', 0x21 => '[', 0x1E => ']',
-        0x27 => '\'', 0x29 => ';', 0x2A => '\\', 0x2B => ',',
-        0x2F => '.', 0x2C => '/', 0x32 => '`',
-        0x1F => 'o', 0x20 => 'u', 0x22 => 'i', 0x23 => 'p',
-        0x25 => 'l', 0x26 => 'j', 0x28 => 'k', 0x2D => 'n',
+        0x12 => '1',
+        0x13 => '2',
+        0x14 => '3',
+        0x15 => '4',
+        0x17 => '5',
+        0x16 => '6',
+        0x1A => '7',
+        0x1C => '8',
+        0x19 => '9',
+        0x1D => '0',
+        0x18 => '=',
+        0x1B => '-',
+        0x21 => '[',
+        0x1E => ']',
+        0x27 => '\'',
+        0x29 => ';',
+        0x2A => '\\',
+        0x2B => ',',
+        0x2F => '.',
+        0x2C => '/',
+        0x32 => '`',
+        0x1F => 'o',
+        0x20 => 'u',
+        0x22 => 'i',
+        0x23 => 'p',
+        0x25 => 'l',
+        0x26 => 'j',
+        0x28 => 'k',
+        0x2D => 'n',
         0x2E => 'm',
         _ => return None,
     })
@@ -384,9 +417,7 @@ impl KeyCombo {
             return Err(ComboParseError::Empty);
         }
 
-        let (key_token, modifier_tokens) = tokens
-            .split_last()
-            .expect("non-empty per check above");
+        let (key_token, modifier_tokens) = tokens.split_last().expect("non-empty per check above");
 
         let mut modifiers = Modifiers::empty();
         for token in modifier_tokens {
