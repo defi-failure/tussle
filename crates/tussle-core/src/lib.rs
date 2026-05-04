@@ -9,7 +9,7 @@ mod hotkey_index;
 pub mod sources;
 
 pub use binding::{Binding, BindingSource};
-pub use combo::{Key, KeyCombo, Modifiers, NamedKey};
+pub use combo::{ComboToken, Key, KeyCombo, Modifiers, NamedKey};
 pub use error::ScanError;
 pub use hotkey_index::HotkeyIndex;
 pub use sources::Source;

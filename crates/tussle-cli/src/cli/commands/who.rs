@@ -24,7 +24,7 @@ pub fn who(
         },
     };
 
-    let sources = default_sources(ax_timeout, ax_concurrency)?;
+    let sources = default_sources(ax_timeout, ax_concurrency, Vec::new())?;
     warn_if_no_accessibility();
 
     let mut matches: Vec<Binding> = Vec::new();

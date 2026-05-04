@@ -13,6 +13,7 @@ use tussle_core::sources::symbolichotkeys::SymbolicHotkeys;
 pub(super) fn default_sources(
     ax_timeout: f32,
     ax_concurrency: usize,
+    app_filter: Vec<String>,
 ) -> Result<Vec<Box<dyn Source>>> {
     let prefs = dirs::preference_dir().context("could not locate user preferences directory")?;
 
@@ -21,7 +22,9 @@ pub(super) fn default_sources(
             prefs.join("com.apple.symbolichotkeys.plist"),
         )),
         Box::new(AppMenuOverrides::new(prefs.clone())),
-        Box::new(Accessibility::new(ax_timeout, ax_concurrency)),
+        Box::new(
+            Accessibility::new(ax_timeout, ax_concurrency).with_bundle_filter(app_filter),
+        ),
     ])
 }
 

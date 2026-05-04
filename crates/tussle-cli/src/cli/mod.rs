@@ -43,6 +43,22 @@ enum Command {
         /// Emit JSON instead of a human-readable table.
         #[arg(long)]
         json: bool,
+
+        /// Keep only bindings whose combo contains this token. A token is
+        /// either a modifier (`cmd`/`command`/`opt`/`alt`/`ctrl`/`shift`/
+        /// `fn`/`globe`) or a key (`space`, `f1`, `a`, …); matching is
+        /// case-insensitive. Repeat for OR semantics. Combined with
+        /// `--app` via AND.
+        #[arg(long, value_name = "TOKEN", action = ArgAction::Append)]
+        key: Vec<String>,
+
+        /// Keep only bindings owned by an app whose bundle id or display
+        /// name contains this substring (case-insensitive). Repeat for OR
+        /// semantics. Pushed down into the Accessibility scan so unmatched
+        /// apps are skipped entirely — `--app rustrover` is much faster
+        /// than scanning everything and filtering afterward.
+        #[arg(long, value_name = "NAME", action = ArgAction::Append)]
+        app: Vec<String>,
     },
     /// Look up which sources own a key combination.
     Who {
@@ -61,7 +77,11 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
     init_tracing(cli.verbose);
     match cli.command {
-        Command::Scan { json } => commands::scan::scan(json, cli.ax_timeout, cli.ax_concurrency),
+        Command::Scan {
+            json,
+            key,
+            app,
+        } => commands::scan::scan(json, cli.ax_timeout, cli.ax_concurrency, key, app),
         Command::Who { combo, json } => {
             commands::who::who(combo, json, cli.ax_timeout, cli.ax_concurrency)
         }

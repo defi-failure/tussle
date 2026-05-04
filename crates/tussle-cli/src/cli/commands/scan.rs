@@ -1,16 +1,30 @@
 //! `tussle scan` — list every binding every source can see.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tabled::builder::Builder;
 use tabled::settings::Style;
-use tussle_core::Binding;
+use tussle_core::{Binding, ComboToken};
 
 use crate::cli::output::emit_json;
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
-pub fn scan(as_json: bool, ax_timeout: f32, ax_concurrency: usize) -> Result<()> {
+pub fn scan(
+    as_json: bool,
+    ax_timeout: f32,
+    ax_concurrency: usize,
+    key_filter: Vec<String>,
+    app_filter: Vec<String>,
+) -> Result<()> {
     let started = std::time::Instant::now();
-    let sources = default_sources(ax_timeout, ax_concurrency)?;
+
+    // Parse `--key` tokens up front so we fail fast on a typo rather than
+    // after a 1-second scan.
+    let key_matchers: Vec<ComboToken> = key_filter
+        .iter()
+        .map(|s| ComboToken::parse(s).with_context(|| format!("parsing --key {s:?}")))
+        .collect::<Result<Vec<_>>>()?;
+
+    let sources = default_sources(ax_timeout, ax_concurrency, app_filter.clone())?;
     warn_if_no_accessibility();
 
     let mut bindings: Vec<Binding> = Vec::new();
@@ -29,6 +43,23 @@ pub fn scan(as_json: bool, ax_timeout: f32, ax_concurrency: usize) -> Result<()>
             Err(e) => tracing::warn!(source = src.name(), error = %e, "source failed"),
         }
     }
+
+    // App filter: also enforced at the CLI side so non-Accessibility sources
+    // (SymbolicHotkeys, NSUserKeyEquivalents) honor it. Accessibility has
+    // already pruned unmatched apps before walking, so this is a no-op for
+    // its rows — it's here for correctness, not perf.
+    if !app_filter.is_empty() {
+        let filter_lc: Vec<String> = app_filter.iter().map(|s| s.to_lowercase()).collect();
+        bindings.retain(|b| {
+            let owner_lc = b.source.owner().to_lowercase();
+            filter_lc.iter().any(|f| owner_lc.contains(f))
+        });
+    }
+
+    if !key_matchers.is_empty() {
+        bindings.retain(|b| key_matchers.iter().any(|m| m.matches(&b.combo)));
+    }
+
     tracing::info!(
         bindings = bindings.len(),
         elapsed_ms = started.elapsed().as_millis() as u64,
