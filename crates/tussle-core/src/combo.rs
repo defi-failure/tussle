@@ -153,21 +153,26 @@ impl Key {
     /// representations of non-printable keys to the corresponding
     /// `NamedKey` variant.
     ///
-    /// This handles three character spaces:
+    /// Sources for the codepoints below:
     ///
-    ///   - **Misc Technical glyphs** — visual symbols Apple uses in menus
-    ///     (⎋ ⏎ ⇥ ⌫ ⌦ ↑↓←→ ⇞⇟ ↖↘) when an app sets `keyEquivalent` to a
-    ///     literal symbol character.
-    ///   - **NSText function-key constants** — Apple's PUA range
-    ///     `\u{F700}–\u{F8FF}` (NSUpArrowFunctionKey, NSF1FunctionKey, etc.)
-    ///     used programmatically for non-printable shortcuts.
-    ///   - **C0 control characters** — `\u{1B}` ESC, `\r` Return, `\t` Tab,
-    ///     `\u{08}` Backspace, `\u{7F}` Delete.
+    ///   - **Misc Technical glyphs** are the visual symbols Apple uses in
+    ///     menus (⎋⏎⇥⌫⌦↑↓←→⇞⇟↖↘). Apple does not formally document each
+    ///     codepoint, but `U+238B` (Escape) and `U+23CE` (Return) are well-
+    ///     established conventions widely cited across Apple developer
+    ///     references and community lists.
+    ///   - **NSText PUA function-key constants** come from `AppKit/NSEvent.h`
+    ///     (e.g. `NSUpArrowFunctionKey = 0xF700`, `NSF1FunctionKey = 0xF704`,
+    ///     `NSDeleteFunctionKey = 0xF728`, `NSHelpFunctionKey = 0xF746`).
+    ///   - **C0 control characters** come from `AppKit/NSText.h`:
+    ///     `NSBackspaceCharacter = 0x08`, `NSTabCharacter = 0x09`,
+    ///     `NSReturnCharacter = 0x0D`, `NSEnterCharacter = 0x03`,
+    ///     `NSDeleteCharacter = 0x7F` (which on Apple keyboards is the main
+    ///     "delete" key — semantically what most platforms call backspace).
     ///
     /// Anything else is preserved as `Key::Char` (lowercased for ASCII).
     pub fn from_char(c: char) -> Key {
         match c {
-            // Misc Technical glyphs (visual symbols)
+            // Misc Technical glyphs (visual symbols Apple uses in menus).
             '\u{238B}' => Key::Named(NamedKey::Escape),
             '\u{23CE}' => Key::Named(NamedKey::Return),
             '\u{21E5}' => Key::Named(NamedKey::Tab),
@@ -182,19 +187,19 @@ impl Key {
             '\u{2196}' => Key::Named(NamedKey::Home),
             '\u{2198}' => Key::Named(NamedKey::End),
 
-            // C0 control chars
-            '\x1B' => Key::Named(NamedKey::Escape),
-            '\r' | '\u{0003}' => Key::Named(NamedKey::Return),
-            '\t' => Key::Named(NamedKey::Tab),
-            '\u{0008}' => Key::Named(NamedKey::Backspace),
-            '\u{007F}' => Key::Named(NamedKey::Delete),
+            // C0 control chars (AppKit/NSText.h).
+            '\u{001B}' => Key::Named(NamedKey::Escape), //          ESC
+            '\u{000D}' | '\u{0003}' => Key::Named(NamedKey::Return), // NSReturnCharacter / NSEnterCharacter
+            '\u{0009}' => Key::Named(NamedKey::Tab), //             NSTabCharacter
+            '\u{0008}' => Key::Named(NamedKey::Backspace), //       NSBackspaceCharacter
+            '\u{007F}' => Key::Named(NamedKey::Backspace), //       NSDeleteCharacter (main "delete" key on Apple kbds)
 
-            // NSText PUA function-key constants (NSUpArrowFunctionKey, etc.)
-            '\u{F700}' => Key::Named(NamedKey::Up),
-            '\u{F701}' => Key::Named(NamedKey::Down),
-            '\u{F702}' => Key::Named(NamedKey::Left),
-            '\u{F703}' => Key::Named(NamedKey::Right),
-            '\u{F704}' => Key::Named(NamedKey::F1),
+            // NSText PUA function-key constants (AppKit/NSEvent.h).
+            '\u{F700}' => Key::Named(NamedKey::Up), //              NSUpArrowFunctionKey
+            '\u{F701}' => Key::Named(NamedKey::Down), //            NSDownArrowFunctionKey
+            '\u{F702}' => Key::Named(NamedKey::Left), //            NSLeftArrowFunctionKey
+            '\u{F703}' => Key::Named(NamedKey::Right), //           NSRightArrowFunctionKey
+            '\u{F704}' => Key::Named(NamedKey::F1), //              NSF1FunctionKey
             '\u{F705}' => Key::Named(NamedKey::F2),
             '\u{F706}' => Key::Named(NamedKey::F3),
             '\u{F707}' => Key::Named(NamedKey::F4),
@@ -213,13 +218,14 @@ impl Key {
             '\u{F714}' => Key::Named(NamedKey::F17),
             '\u{F715}' => Key::Named(NamedKey::F18),
             '\u{F716}' => Key::Named(NamedKey::F19),
-            '\u{F717}' => Key::Named(NamedKey::F20),
-            '\u{F727}' => Key::Named(NamedKey::Insert),
-            '\u{F729}' => Key::Named(NamedKey::Home),
-            '\u{F72B}' => Key::Named(NamedKey::End),
-            '\u{F72C}' => Key::Named(NamedKey::PageUp),
-            '\u{F72D}' => Key::Named(NamedKey::PageDown),
-            '\u{F746}' => Key::Named(NamedKey::Help),
+            '\u{F717}' => Key::Named(NamedKey::F20), //             NSF20FunctionKey
+            '\u{F727}' => Key::Named(NamedKey::Insert), //          NSInsertFunctionKey
+            '\u{F728}' => Key::Named(NamedKey::Delete), //          NSDeleteFunctionKey (forward-delete)
+            '\u{F729}' => Key::Named(NamedKey::Home), //            NSHomeFunctionKey
+            '\u{F72B}' => Key::Named(NamedKey::End), //             NSEndFunctionKey
+            '\u{F72C}' => Key::Named(NamedKey::PageUp), //          NSPageUpFunctionKey
+            '\u{F72D}' => Key::Named(NamedKey::PageDown), //        NSPageDownFunctionKey
+            '\u{F746}' => Key::Named(NamedKey::Help), //            NSHelpFunctionKey
 
             other => Key::Char(other.to_ascii_lowercase()),
         }
@@ -440,7 +446,19 @@ mod tests {
         fn from_char_normalizes_c0_controls() {
             assert_eq!(Key::from_char('\x1B'), Key::Named(NamedKey::Escape));
             assert_eq!(Key::from_char('\t'), Key::Named(NamedKey::Tab));
-            assert_eq!(Key::from_char('\u{007F}'), Key::Named(NamedKey::Delete));
+            // 0x7F is NSDeleteCharacter — Apple's main "delete" key, which
+            // every other platform calls Backspace.
+            assert_eq!(Key::from_char('\u{007F}'), Key::Named(NamedKey::Backspace));
+            assert_eq!(Key::from_char('\u{0008}'), Key::Named(NamedKey::Backspace));
+        }
+
+        #[test]
+        fn from_char_distinguishes_backspace_from_forward_delete() {
+            // NSBackspaceCharacter / NSDeleteCharacter both → Backspace.
+            assert_eq!(Key::from_char('\u{0008}'), Key::Named(NamedKey::Backspace));
+            assert_eq!(Key::from_char('\u{007F}'), Key::Named(NamedKey::Backspace));
+            // NSDeleteFunctionKey is the dedicated forward-delete key.
+            assert_eq!(Key::from_char('\u{F728}'), Key::Named(NamedKey::Delete));
         }
 
         #[test]

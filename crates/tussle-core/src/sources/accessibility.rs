@@ -202,30 +202,29 @@ mod platform {
         })
     }
 
-    /// Decode `AXMenuItemCmdModifiers`. The bits are:
-    ///
-    /// | bit  | meaning           |
-    /// |------|-------------------|
-    /// | 0x01 | Shift             |
-    /// | 0x02 | Option            |
-    /// | 0x04 | Control           |
-    /// | 0x08 | No-command        |
+    // `AXMenuItemModifiers` constants from `HIServices/AXAttributeConstants.h`.
+    const AX_MOD_SHIFT: i64 = 1 << 0; //      kAXMenuItemModifierShift
+    const AX_MOD_OPTION: i64 = 1 << 1; //     kAXMenuItemModifierOption
+    const AX_MOD_CONTROL: i64 = 1 << 2; //    kAXMenuItemModifierControl
+    const AX_MOD_NO_COMMAND: i64 = 1 << 3; // kAXMenuItemModifierNoCommand
+
+    /// Decode an `AXMenuItemCmdModifiers` integer.
     ///
     /// Cmd is **implicit** for menu shortcuts and we add it unless the
     /// no-command bit is set (which apps use for non-Cmd shortcuts like
     /// PixPin's ⌃1 / ⌃2).
     fn decode_ax_modifiers(mask: i64) -> Modifiers {
         let mut m = Modifiers::empty();
-        if mask & 0x01 != 0 {
+        if mask & AX_MOD_SHIFT != 0 {
             m |= Modifiers::SHIFT;
         }
-        if mask & 0x02 != 0 {
+        if mask & AX_MOD_OPTION != 0 {
             m |= Modifiers::OPT;
         }
-        if mask & 0x04 != 0 {
+        if mask & AX_MOD_CONTROL != 0 {
             m |= Modifiers::CTRL;
         }
-        if mask & 0x08 == 0 {
+        if mask & AX_MOD_NO_COMMAND == 0 {
             m |= Modifiers::CMD;
         }
         m

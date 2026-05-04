@@ -49,12 +49,14 @@ const PARAM_MASK: usize = 2;
 /// Sentinel value Apple writes when a parameter slot is unset.
 const UNSET: i64 = 65535;
 
-/// NSEvent modifier flag bits. Defined in `<AppKit/NSEvent.h>`.
-const NS_SHIFT: u64 = 0x0002_0000;
-const NS_CTRL: u64 = 0x0004_0000;
-const NS_OPT: u64 = 0x0008_0000;
-const NS_CMD: u64 = 0x0010_0000;
-const NS_FN: u64 = 0x0080_0000;
+/// NSEvent modifier flag bits, from `AppKit/NSEvent.h`.
+/// Each constant is `1 << n` for a specific n; written as a hex literal here
+/// for direct readability against the plist's stored `mask` integer.
+const NS_SHIFT: u64 = 1 << 17; // NSEventModifierFlagShift   = 0x0002_0000
+const NS_CTRL: u64 = 1 << 18; //  NSEventModifierFlagControl = 0x0004_0000
+const NS_OPT: u64 = 1 << 19; //   NSEventModifierFlagOption  = 0x0008_0000
+const NS_CMD: u64 = 1 << 20; //   NSEventModifierFlagCommand = 0x0010_0000
+const NS_FN: u64 = 1 << 23; //    NSEventModifierFlagFunction = 0x0080_0000
 
 /// What the user's plist says about a particular hotkey ID.
 #[derive(Debug, Clone, Copy)]
@@ -359,43 +361,45 @@ fn decode_key(char_code: i64, vk: i64) -> Key {
     Key::Virtual(0)
 }
 
-/// Map macOS virtual keycodes (from `<HIToolbox/Events.h>`) to `NamedKey`.
+/// Map macOS virtual keycodes to `NamedKey`. All values verified against
+/// `Carbon/HIToolbox.framework/Headers/Events.h` (kVK_* constants).
 fn vk_to_named(vk: u16) -> Option<NamedKey> {
     let n = match vk {
-        0x31 => NamedKey::Space,
-        0x24 => NamedKey::Return,
-        0x30 => NamedKey::Tab,
-        0x35 => NamedKey::Escape,
-        0x75 => NamedKey::Delete,
-        0x33 => NamedKey::Backspace,
-        0x7A => NamedKey::F1,
-        0x78 => NamedKey::F2,
-        0x63 => NamedKey::F3,
-        0x76 => NamedKey::F4,
-        0x60 => NamedKey::F5,
-        0x61 => NamedKey::F6,
-        0x62 => NamedKey::F7,
-        0x64 => NamedKey::F8,
-        0x65 => NamedKey::F9,
-        0x6D => NamedKey::F10,
-        0x67 => NamedKey::F11,
-        0x6F => NamedKey::F12,
-        0x69 => NamedKey::F13,
-        0x6B => NamedKey::F14,
-        0x71 => NamedKey::F15,
-        0x6A => NamedKey::F16,
-        0x40 => NamedKey::F17,
-        0x4F => NamedKey::F18,
-        0x50 => NamedKey::F19,
-        0x5A => NamedKey::F20,
-        0x7E => NamedKey::Up,
-        0x7D => NamedKey::Down,
-        0x7B => NamedKey::Left,
-        0x7C => NamedKey::Right,
-        0x74 => NamedKey::PageUp,
-        0x79 => NamedKey::PageDown,
-        0x73 => NamedKey::Home,
-        0x77 => NamedKey::End,
+        0x31 => NamedKey::Space, //          kVK_Space
+        0x24 => NamedKey::Return, //         kVK_Return
+        0x30 => NamedKey::Tab, //            kVK_Tab
+        0x35 => NamedKey::Escape, //         kVK_Escape
+        0x33 => NamedKey::Backspace, //      kVK_Delete (= main delete key, semantically Backspace)
+        0x75 => NamedKey::Delete, //         kVK_ForwardDelete
+        0x72 => NamedKey::Help, //           kVK_Help
+        0x7A => NamedKey::F1, //             kVK_F1
+        0x78 => NamedKey::F2, //             kVK_F2
+        0x63 => NamedKey::F3, //             kVK_F3
+        0x76 => NamedKey::F4, //             kVK_F4
+        0x60 => NamedKey::F5, //             kVK_F5
+        0x61 => NamedKey::F6, //             kVK_F6
+        0x62 => NamedKey::F7, //             kVK_F7
+        0x64 => NamedKey::F8, //             kVK_F8
+        0x65 => NamedKey::F9, //             kVK_F9
+        0x6D => NamedKey::F10, //            kVK_F10
+        0x67 => NamedKey::F11, //            kVK_F11
+        0x6F => NamedKey::F12, //            kVK_F12
+        0x69 => NamedKey::F13, //            kVK_F13
+        0x6B => NamedKey::F14, //            kVK_F14
+        0x71 => NamedKey::F15, //            kVK_F15
+        0x6A => NamedKey::F16, //            kVK_F16
+        0x40 => NamedKey::F17, //            kVK_F17
+        0x4F => NamedKey::F18, //            kVK_F18
+        0x50 => NamedKey::F19, //            kVK_F19
+        0x5A => NamedKey::F20, //            kVK_F20
+        0x7E => NamedKey::Up, //             kVK_UpArrow
+        0x7D => NamedKey::Down, //           kVK_DownArrow
+        0x7B => NamedKey::Left, //           kVK_LeftArrow
+        0x7C => NamedKey::Right, //          kVK_RightArrow
+        0x74 => NamedKey::PageUp, //         kVK_PageUp
+        0x79 => NamedKey::PageDown, //       kVK_PageDown
+        0x73 => NamedKey::Home, //           kVK_Home
+        0x77 => NamedKey::End, //            kVK_End
         _ => return None,
     };
     Some(n)
