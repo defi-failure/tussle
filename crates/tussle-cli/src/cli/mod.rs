@@ -134,6 +134,7 @@ fn init_tracing(verbosity: u8) {
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
         .with_target(false)
+        .without_time()
         .compact()
         .try_init();
 }
