@@ -134,12 +134,12 @@ fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("{combo} is held by:");
     let mut builder = Builder::default();
     builder.push_record(["Owner", "Action"]);
     for b in &matches {
         builder.push_record([b.source.owner(), b.label.as_str()]);
     }
+    println!();
     println!("{}", builder.build().with(Style::psql()));
     Ok(())
 }
