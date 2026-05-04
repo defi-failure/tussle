@@ -16,7 +16,7 @@ use crate::{Binding, ScanError};
 use super::Source;
 
 /// Source backed by the macOS Accessibility API.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Accessibility {
     /// Per-app `AXUIElementSetMessagingTimeout`, in seconds. Values `<= 0`
     /// leave the system default in place. Tight values (e.g. 1.0) prevent a
@@ -28,6 +28,12 @@ pub struct Accessibility {
     /// pathological sessions (hundreds of processes) ever hit the chunked
     /// path.
     pub max_concurrency: usize,
+    /// Optional case-insensitive substring filter on bundle id / app name.
+    /// Empty = scan every running app. Non-empty = retain only apps whose
+    /// `bundle_id` or `app_name` contains at least one of these substrings
+    /// (OR semantics). Pushed down before walking menus, so scanning
+    /// "rustrover" out of 80 running apps walks just one.
+    pub bundle_filter: Vec<String>,
 }
 
 impl Default for Accessibility {
@@ -35,6 +41,7 @@ impl Default for Accessibility {
         Self {
             messaging_timeout: 1.0,
             max_concurrency: 128,
+            bundle_filter: Vec::new(),
         }
     }
 }
@@ -44,7 +51,16 @@ impl Accessibility {
         Self {
             messaging_timeout,
             max_concurrency,
+            bundle_filter: Vec::new(),
         }
+    }
+
+    /// Restrict the scan to apps whose `bundle_id` or `app_name`
+    /// case-insensitively contains any of `filter`. Empty `filter` clears
+    /// the restriction.
+    pub fn with_bundle_filter(mut self, filter: Vec<String>) -> Self {
+        self.bundle_filter = filter;
+        self
     }
 }
 
@@ -56,7 +72,11 @@ impl Source for Accessibility {
     fn scan(&self) -> Result<Vec<Binding>, ScanError> {
         #[cfg(target_os = "macos")]
         {
-            macos::scan(self.messaging_timeout, self.max_concurrency)
+            macos::scan(
+                self.messaging_timeout,
+                self.max_concurrency,
+                &self.bundle_filter,
+            )
         }
         #[cfg(not(target_os = "macos"))]
         {
