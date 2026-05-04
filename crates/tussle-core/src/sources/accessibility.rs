@@ -115,9 +115,18 @@ mod platform {
         }
 
         let mut bindings = Vec::new();
+
+        // Main menu bar (visible when app is frontmost).
         if let Some(menu_bar) = copy_attribute(element, kAXMenuBarAttribute) {
             walk_menu(menu_bar, app, &[], 0, &mut bindings);
             unsafe { core_foundation::base::CFRelease(menu_bar as _) };
+        }
+
+        // Status-bar (NSStatusItem) dropdowns. Menubar-only apps like PixPin
+        // expose their main shortcuts here, not on the regular menu bar.
+        if let Some(extras) = copy_attribute(element, "AXExtrasMenuBar") {
+            walk_menu(extras, app, &[], 0, &mut bindings);
+            unsafe { core_foundation::base::CFRelease(extras as _) };
         }
 
         unsafe { core_foundation::base::CFRelease(element as _) };
