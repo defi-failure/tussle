@@ -42,7 +42,6 @@ mod platform {
     };
 
     use super::capture_error;
-    use crate::sources::symbolichotkeys::vk_to_named;
     use crate::{Key, KeyCombo, Modifiers, ScanError};
 
     // FFI binding to IOKit's `IOHIDRequestAccess`. From
@@ -163,9 +162,6 @@ mod platform {
     }
 
     fn vk_to_key(vk: u16) -> Key {
-        if let Some(named) = vk_to_named(vk) {
-            return Key::Named(named);
-        }
-        Key::Virtual(vk)
+        Key::from_vk(vk)
     }
 }

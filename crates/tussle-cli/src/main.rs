@@ -89,13 +89,10 @@ fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
             KeyCombo::parse(&text).with_context(|| format!("parsing combo {text:?}"))?
         }
         None => {
-            eprintln!(
-                "Press the hotkey you want to look up...\n\
-                 (Ctrl+C to abort. If nothing happens after pressing a key, \
-                 grant Input Monitoring permission in System Settings → \
-                 Privacy & Security → Input Monitoring, then re-run.)"
-            );
-            capture::capture_one_combo().context("capturing keystroke")?
+            eprintln!("Press the hotkey to look up (Ctrl+C to abort)...");
+            let combo = capture::capture_one_combo().context("capturing keystroke")?;
+            eprintln!("Captured: {combo} — looking up...");
+            combo
         }
     };
 
