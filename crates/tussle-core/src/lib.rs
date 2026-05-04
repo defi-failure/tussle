@@ -2,6 +2,7 @@
 //! across system, application menus, and third-party launchers.
 
 mod binding;
+pub mod capture;
 mod combo;
 mod error;
 mod hotkey_index;

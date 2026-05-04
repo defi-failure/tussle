@@ -363,7 +363,7 @@ fn decode_key(char_code: i64, vk: i64) -> Key {
 
 /// Map macOS virtual keycodes to `NamedKey`. All values verified against
 /// `Carbon/HIToolbox.framework/Headers/Events.h` (kVK_* constants).
-fn vk_to_named(vk: u16) -> Option<NamedKey> {
+pub(crate) fn vk_to_named(vk: u16) -> Option<NamedKey> {
     let n = match vk {
         0x31 => NamedKey::Space, //          kVK_Space
         0x24 => NamedKey::Return, //         kVK_Return

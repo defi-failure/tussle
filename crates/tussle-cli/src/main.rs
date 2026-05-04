@@ -1,8 +1,9 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use tabled::builder::Builder;
 use tabled::settings::Style;
+use tussle_core::capture;
 use tussle_core::sources::accessibility::{self, Accessibility};
 use tussle_core::sources::nsuserkeyequivalents::AppMenuOverrides;
 use tussle_core::sources::symbolichotkeys::SymbolicHotkeys;
@@ -83,11 +84,15 @@ fn scan(as_json: bool) -> Result<()> {
 }
 
 fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
-    let Some(combo_text) = combo_arg else {
-        bail!("interactive capture mode is not yet implemented; pass a combo like `tussle who cmd+opt+b`");
+    let combo = match combo_arg {
+        Some(text) => {
+            KeyCombo::parse(&text).with_context(|| format!("parsing combo {text:?}"))?
+        }
+        None => {
+            eprintln!("Press the hotkey you want to look up...");
+            capture::capture_one_combo().context("capturing keystroke")?
+        }
     };
-    let combo = KeyCombo::parse(&combo_text)
-        .with_context(|| format!("parsing combo {combo_text:?}"))?;
 
     let sources = default_sources()?;
 
