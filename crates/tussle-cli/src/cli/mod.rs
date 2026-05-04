@@ -25,9 +25,10 @@ struct Cli {
     #[arg(long, global = true, default_value_t = 128, value_name = "N")]
     ax_concurrency: usize,
 
-    /// Increase log verbosity. `-v` enables INFO (high-level progress),
-    /// `-vv` enables DEBUG (per-app timing, filter decisions). Overridden
-    /// by `RUST_LOG` if set.
+    /// Increase log verbosity. `-v` INFO (high-level progress), `-vv` DEBUG
+    /// (per-app timing, filter decisions), `-vvv` TRACE (per-AX-call detail
+    /// — only useful when diagnosing a specific slow IPC). Overridden by
+    /// `RUST_LOG` if set.
     #[arg(short, long, global = true, action = ArgAction::Count)]
     verbose: u8,
 
@@ -72,12 +73,14 @@ pub fn run() -> Result<()> {
 /// crates (`tussle_core` and `tussle_cli`):
 ///   - `0` → WARN (only real problems)
 ///   - `1` → INFO (high-level progress)
-///   - `≥2` → DEBUG (per-app timings, filter decisions)
+///   - `2` → DEBUG (per-app timings, filter decisions)
+///   - `≥3` → TRACE (per-AX-call detail)
 fn init_tracing(verbosity: u8) {
     let default_level = match verbosity {
         0 => "warn",
         1 => "info",
-        _ => "debug",
+        2 => "debug",
+        _ => "trace",
     };
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new(format!("tussle_core={lvl},tussle_cli={lvl}", lvl = default_level))
