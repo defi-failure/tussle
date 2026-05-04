@@ -158,6 +158,12 @@ impl Key {
             '\u{0009}' => Key::Named(NamedKey::Tab),
             '\u{0008}' | '\u{007F}' => Key::Named(NamedKey::Backspace),
 
+            // Plain space — Apple's `kAXMenuItemCmdChar` for space-bar
+            // shortcuts (e.g. JetBrains' Basic Completion = ctrl+space) is
+            // literally `" "`. Without this case we'd render `ctrl+ ` and
+            // it would look like the key was missing.
+            ' ' => Key::Named(NamedKey::Space),
+
             // NSText PUA function-key constants from AppKit/NSEvent.h:
             //   NSUpArrowFunctionKey    = 0xF700
             //   NSDownArrowFunctionKey  = 0xF701
@@ -300,6 +306,11 @@ mod tests {
     fn from_char_lowercases_ascii() {
         assert_eq!(Key::from_char('A'), Key::Char('a'));
         assert_eq!(Key::from_char('z'), Key::Char('z'));
+    }
+
+    #[test]
+    fn from_char_normalizes_space() {
+        assert_eq!(Key::from_char(' '), Key::Named(NamedKey::Space));
     }
 
     #[test]
