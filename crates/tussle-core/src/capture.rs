@@ -45,6 +45,25 @@ mod platform {
     use crate::sources::symbolichotkeys::vk_to_named;
     use crate::{Key, KeyCombo, Modifiers, ScanError};
 
+    // FFI binding to IOKit's `IOHIDRequestAccess`. From
+    // `IOKit/hidsystem/IOHIDLib.h` (verified against macOS 15.4/26.1 SDK):
+    //
+    //   typedef enum {
+    //       kIOHIDRequestTypePostEvent   = 0,
+    //       kIOHIDRequestTypeListenEvent = 1,
+    //   } IOHIDRequestType;
+    //   Boolean IOHIDRequestAccess(IOHIDRequestType requestType);
+    //
+    // Calling this triggers macOS's Input Monitoring permission dialog the
+    // first time access status is undecided, and returns the cached result
+    // after the user has decided. Without it, CGEventTap silently never
+    // fires when permission is missing.
+    #[link(name = "IOKit", kind = "framework")]
+    unsafe extern "C" {
+        fn IOHIDRequestAccess(requestType: u32) -> u8;
+    }
+    const KIOHID_REQUEST_TYPE_LISTEN_EVENT: u32 = 1;
+
     /// Mask bits from `CoreGraphics/CGEventTypes.h` (`kCGEventFlagMask*`).
     /// Identical to `NSEventModifierFlag*` because Cocoa events store the
     /// same flags.
@@ -55,6 +74,19 @@ mod platform {
     const FLAG_FUNCTION: u64 = 1 << 23; //  kCGEventFlagMaskSecondaryFn
 
     pub fn capture() -> Result<KeyCombo, ScanError> {
+        // Trigger the Input Monitoring TCC dialog on first run (or read the
+        // cached granted/denied state). Without this, CGEventTap silently
+        // installs but never fires events when permission is missing.
+        // SAFETY: pure C call, no preconditions.
+        let granted = unsafe { IOHIDRequestAccess(KIOHID_REQUEST_TYPE_LISTEN_EVENT) != 0 };
+        if !granted {
+            return Err(capture_error(
+                "Input Monitoring permission denied. Grant access in \
+                 System Settings → Privacy & Security → Input Monitoring \
+                 and re-run.",
+            ));
+        }
+
         let captured: Arc<Mutex<Option<KeyCombo>>> = Arc::new(Mutex::new(None));
         let captured_for_cb = Arc::clone(&captured);
 
