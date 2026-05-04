@@ -50,14 +50,17 @@ const PARAM_MASK: usize = 2;
 /// Sentinel value Apple writes when a parameter slot is unset.
 const UNSET: i64 = 65535;
 
-/// NSEvent modifier flag bits, from `AppKit/NSEvent.h`.
-/// Each constant is `1 << n` for a specific n; written as a hex literal here
-/// for direct readability against the plist's stored `mask` integer.
-const NS_SHIFT: u64 = 1 << 17; // NSEventModifierFlagShift   = 0x0002_0000
-const NS_CTRL: u64 = 1 << 18; //  NSEventModifierFlagControl = 0x0004_0000
-const NS_OPT: u64 = 1 << 19; //   NSEventModifierFlagOption  = 0x0008_0000
-const NS_CMD: u64 = 1 << 20; //   NSEventModifierFlagCommand = 0x0010_0000
-const NS_FN: u64 = 1 << 23; //    NSEventModifierFlagFunction = 0x0080_0000
+// NSEvent modifier flag bits, from `AppKit/NSEvent.h`:
+//   NSEventModifierFlagShift    = 1 << 17  = 0x0002_0000
+//   NSEventModifierFlagControl  = 1 << 18  = 0x0004_0000
+//   NSEventModifierFlagOption   = 1 << 19  = 0x0008_0000
+//   NSEventModifierFlagCommand  = 1 << 20  = 0x0010_0000
+//   NSEventModifierFlagFunction = 1 << 23  = 0x0080_0000
+const NS_SHIFT: u64 = 1 << 17;
+const NS_CTRL: u64 = 1 << 18;
+const NS_OPT: u64 = 1 << 19;
+const NS_CMD: u64 = 1 << 20;
+const NS_FN: u64 = 1 << 23;
 
 /// What the user's plist says about a particular hotkey ID.
 #[derive(Debug, Clone, Copy)]

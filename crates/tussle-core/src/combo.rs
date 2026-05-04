@@ -187,19 +187,31 @@ impl Key {
             '\u{2196}' => Key::Named(NamedKey::Home),
             '\u{2198}' => Key::Named(NamedKey::End),
 
-            // C0 control chars (AppKit/NSText.h).
-            '\u{001B}' => Key::Named(NamedKey::Escape), //          ESC
+            // C0 control chars (AppKit/NSText.h). 0x7F is NSDeleteCharacter
+            // — Apple's main "delete" key, semantically Backspace.
+            '\u{001B}' => Key::Named(NamedKey::Escape),
             '\u{000D}' | '\u{0003}' => Key::Named(NamedKey::Return), // NSReturnCharacter / NSEnterCharacter
-            '\u{0009}' => Key::Named(NamedKey::Tab),                 //             NSTabCharacter
-            '\u{0008}' => Key::Named(NamedKey::Backspace),           //       NSBackspaceCharacter
-            '\u{007F}' => Key::Named(NamedKey::Backspace), //       NSDeleteCharacter (main "delete" key on Apple kbds)
+            '\u{0009}' => Key::Named(NamedKey::Tab),                 // NSTabCharacter
+            '\u{0008}' | '\u{007F}' => Key::Named(NamedKey::Backspace), // NSBackspaceCharacter / NSDeleteCharacter
 
-            // NSText PUA function-key constants (AppKit/NSEvent.h).
-            '\u{F700}' => Key::Named(NamedKey::Up), //              NSUpArrowFunctionKey
-            '\u{F701}' => Key::Named(NamedKey::Down), //            NSDownArrowFunctionKey
-            '\u{F702}' => Key::Named(NamedKey::Left), //            NSLeftArrowFunctionKey
-            '\u{F703}' => Key::Named(NamedKey::Right), //           NSRightArrowFunctionKey
-            '\u{F704}' => Key::Named(NamedKey::F1), //              NSF1FunctionKey
+            // NSText PUA function-key constants from AppKit/NSEvent.h:
+            //   NSUpArrowFunctionKey    = 0xF700
+            //   NSDownArrowFunctionKey  = 0xF701
+            //   NSLeftArrowFunctionKey  = 0xF702
+            //   NSRightArrowFunctionKey = 0xF703
+            //   NSF1FunctionKey..NSF20FunctionKey = 0xF704..0xF717
+            //   NSInsertFunctionKey     = 0xF727
+            //   NSDeleteFunctionKey     = 0xF728  (forward-delete)
+            //   NSHomeFunctionKey       = 0xF729
+            //   NSEndFunctionKey        = 0xF72B
+            //   NSPageUpFunctionKey     = 0xF72C
+            //   NSPageDownFunctionKey   = 0xF72D
+            //   NSHelpFunctionKey       = 0xF746
+            '\u{F700}' => Key::Named(NamedKey::Up),
+            '\u{F701}' => Key::Named(NamedKey::Down),
+            '\u{F702}' => Key::Named(NamedKey::Left),
+            '\u{F703}' => Key::Named(NamedKey::Right),
+            '\u{F704}' => Key::Named(NamedKey::F1),
             '\u{F705}' => Key::Named(NamedKey::F2),
             '\u{F706}' => Key::Named(NamedKey::F3),
             '\u{F707}' => Key::Named(NamedKey::F4),
@@ -218,14 +230,14 @@ impl Key {
             '\u{F714}' => Key::Named(NamedKey::F17),
             '\u{F715}' => Key::Named(NamedKey::F18),
             '\u{F716}' => Key::Named(NamedKey::F19),
-            '\u{F717}' => Key::Named(NamedKey::F20), //             NSF20FunctionKey
-            '\u{F727}' => Key::Named(NamedKey::Insert), //          NSInsertFunctionKey
-            '\u{F728}' => Key::Named(NamedKey::Delete), //          NSDeleteFunctionKey (forward-delete)
-            '\u{F729}' => Key::Named(NamedKey::Home),   //            NSHomeFunctionKey
-            '\u{F72B}' => Key::Named(NamedKey::End),    //             NSEndFunctionKey
-            '\u{F72C}' => Key::Named(NamedKey::PageUp), //          NSPageUpFunctionKey
-            '\u{F72D}' => Key::Named(NamedKey::PageDown), //        NSPageDownFunctionKey
-            '\u{F746}' => Key::Named(NamedKey::Help),   //            NSHelpFunctionKey
+            '\u{F717}' => Key::Named(NamedKey::F20),
+            '\u{F727}' => Key::Named(NamedKey::Insert),
+            '\u{F728}' => Key::Named(NamedKey::Delete),
+            '\u{F729}' => Key::Named(NamedKey::Home),
+            '\u{F72B}' => Key::Named(NamedKey::End),
+            '\u{F72C}' => Key::Named(NamedKey::PageUp),
+            '\u{F72D}' => Key::Named(NamedKey::PageDown),
+            '\u{F746}' => Key::Named(NamedKey::Help),
 
             other => Key::Char(other.to_ascii_lowercase()),
         }
@@ -257,16 +269,18 @@ impl Key {
 
 /// Map macOS virtual keycodes to `NamedKey`. All values verified against
 /// `Carbon/HIToolbox.framework/Headers/Events.h` (kVK_* constants).
+/// `kVK_Delete` is Apple's name for the main delete key — semantically
+/// Backspace on every other platform.
 pub(crate) fn vk_to_named(vk: u16) -> Option<NamedKey> {
     let n = match vk {
-        0x31 => NamedKey::Space,     //          kVK_Space
-        0x24 => NamedKey::Return,    //         kVK_Return
-        0x30 => NamedKey::Tab,       //            kVK_Tab
-        0x35 => NamedKey::Escape,    //         kVK_Escape
-        0x33 => NamedKey::Backspace, //      kVK_Delete (= main delete key, semantically Backspace)
-        0x75 => NamedKey::Delete,    //         kVK_ForwardDelete
-        0x72 => NamedKey::Help,      //           kVK_Help
-        0x7A => NamedKey::F1,        //             kVK_F1
+        0x31 => NamedKey::Space,     // kVK_Space
+        0x24 => NamedKey::Return,    // kVK_Return
+        0x30 => NamedKey::Tab,       // kVK_Tab
+        0x35 => NamedKey::Escape,    // kVK_Escape
+        0x33 => NamedKey::Backspace, // kVK_Delete (Apple's main delete = Backspace)
+        0x75 => NamedKey::Delete,    // kVK_ForwardDelete
+        0x72 => NamedKey::Help,      // kVK_Help
+        0x7A => NamedKey::F1,
         0x78 => NamedKey::F2,
         0x63 => NamedKey::F3,
         0x76 => NamedKey::F4,
@@ -286,14 +300,14 @@ pub(crate) fn vk_to_named(vk: u16) -> Option<NamedKey> {
         0x4F => NamedKey::F18,
         0x50 => NamedKey::F19,
         0x5A => NamedKey::F20,
-        0x7E => NamedKey::Up,       //             kVK_UpArrow
-        0x7D => NamedKey::Down,     //           kVK_DownArrow
-        0x7B => NamedKey::Left,     //           kVK_LeftArrow
-        0x7C => NamedKey::Right,    //          kVK_RightArrow
-        0x74 => NamedKey::PageUp,   //         kVK_PageUp
-        0x79 => NamedKey::PageDown, //       kVK_PageDown
-        0x73 => NamedKey::Home,     //           kVK_Home
-        0x77 => NamedKey::End,      //            kVK_End
+        0x7E => NamedKey::Up,       // kVK_UpArrow
+        0x7D => NamedKey::Down,     // kVK_DownArrow
+        0x7B => NamedKey::Left,     // kVK_LeftArrow
+        0x7C => NamedKey::Right,    // kVK_RightArrow
+        0x74 => NamedKey::PageUp,   // kVK_PageUp
+        0x79 => NamedKey::PageDown, // kVK_PageDown
+        0x73 => NamedKey::Home,     // kVK_Home
+        0x77 => NamedKey::End,      // kVK_End
         _ => return None,
     };
     Some(n)

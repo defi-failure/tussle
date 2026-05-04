@@ -202,11 +202,15 @@ mod platform {
         })
     }
 
-    // `AXMenuItemModifiers` constants from `HIServices/AXAttributeConstants.h`.
-    const AX_MOD_SHIFT: i64 = 1 << 0; //      kAXMenuItemModifierShift
-    const AX_MOD_OPTION: i64 = 1 << 1; //     kAXMenuItemModifierOption
-    const AX_MOD_CONTROL: i64 = 1 << 2; //    kAXMenuItemModifierControl
-    const AX_MOD_NO_COMMAND: i64 = 1 << 3; // kAXMenuItemModifierNoCommand
+    // `AXMenuItemModifiers` from `HIServices/AXAttributeConstants.h`:
+    //   kAXMenuItemModifierShift     = 1 << 0
+    //   kAXMenuItemModifierOption    = 1 << 1
+    //   kAXMenuItemModifierControl   = 1 << 2
+    //   kAXMenuItemModifierNoCommand = 1 << 3
+    const AX_MOD_SHIFT: i64 = 1 << 0;
+    const AX_MOD_OPTION: i64 = 1 << 1;
+    const AX_MOD_CONTROL: i64 = 1 << 2;
+    const AX_MOD_NO_COMMAND: i64 = 1 << 3;
 
     /// Decode an `AXMenuItemCmdModifiers` integer.
     ///

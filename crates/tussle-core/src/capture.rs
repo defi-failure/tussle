@@ -73,14 +73,19 @@ mod platform {
     }
     const KIOHID_REQUEST_TYPE_LISTEN_EVENT: u32 = 1;
 
-    /// Mask bits from `CoreGraphics/CGEventTypes.h` (`kCGEventFlagMask*`).
-    /// Identical to `NSEventModifierFlag*` because Cocoa events store the
-    /// same flags.
-    const FLAG_SHIFT: u64 = 1 << 17; //     kCGEventFlagMaskShift
-    const FLAG_CONTROL: u64 = 1 << 18; //   kCGEventFlagMaskControl
-    const FLAG_ALTERNATE: u64 = 1 << 19; // kCGEventFlagMaskAlternate (Option)
-    const FLAG_COMMAND: u64 = 1 << 20; //   kCGEventFlagMaskCommand
-    const FLAG_FUNCTION: u64 = 1 << 23; //  kCGEventFlagMaskSecondaryFn
+    // Mask bits from `CoreGraphics/CGEventTypes.h` (`kCGEventFlagMask*`).
+    // Identical to `NSEventModifierFlag*` because Cocoa events store the
+    // same flags.
+    //   kCGEventFlagMaskShift       = 1 << 17
+    //   kCGEventFlagMaskControl     = 1 << 18
+    //   kCGEventFlagMaskAlternate   = 1 << 19  (Option)
+    //   kCGEventFlagMaskCommand     = 1 << 20
+    //   kCGEventFlagMaskSecondaryFn = 1 << 23
+    const FLAG_SHIFT: u64 = 1 << 17;
+    const FLAG_CONTROL: u64 = 1 << 18;
+    const FLAG_ALTERNATE: u64 = 1 << 19;
+    const FLAG_COMMAND: u64 = 1 << 20;
+    const FLAG_FUNCTION: u64 = 1 << 23;
 
     pub fn capture<F>(on_modifiers_changed: F) -> Result<KeyCombo, ScanError>
     where
