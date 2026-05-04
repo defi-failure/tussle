@@ -197,15 +197,23 @@ mod platform {
         let first_char = ch.chars().next()?;
         let mask = copy_i64(item, kAXMenuItemCmdModifiersAttribute).unwrap_or(0);
         Some(KeyCombo {
-            modifiers: decode_ax_modifiers(mask) | Modifiers::CMD,
+            modifiers: decode_ax_modifiers(mask),
             key: Key::from_char(first_char),
         })
     }
 
-    /// Accessibility's `AXMenuItemCmdModifiers` is a small integer where the
-    /// command key is implicit; bits 1/2/4/8 add Shift/Option/Control/none.
-    /// We translate that into our `Modifiers` set (Cmd is added by the
-    /// caller because it's always implied for menu shortcuts).
+    /// Decode `AXMenuItemCmdModifiers`. The bits are:
+    ///
+    /// | bit  | meaning           |
+    /// |------|-------------------|
+    /// | 0x01 | Shift             |
+    /// | 0x02 | Option            |
+    /// | 0x04 | Control           |
+    /// | 0x08 | No-command        |
+    ///
+    /// Cmd is **implicit** for menu shortcuts and we add it unless the
+    /// no-command bit is set (which apps use for non-Cmd shortcuts like
+    /// PixPin's ⌃1 / ⌃2).
     fn decode_ax_modifiers(mask: i64) -> Modifiers {
         let mut m = Modifiers::empty();
         if mask & 0x01 != 0 {
@@ -217,10 +225,8 @@ mod platform {
         if mask & 0x04 != 0 {
             m |= Modifiers::CTRL;
         }
-        // Bit 0x08 means "no command key" — i.e. the shortcut does NOT
-        // include Cmd. The caller decides whether to add CMD by default.
-        if mask & 0x08 != 0 {
-            m.remove(Modifiers::CMD);
+        if mask & 0x08 == 0 {
+            m |= Modifiers::CMD;
         }
         m
     }
