@@ -15,8 +15,17 @@ pub fn scan(as_json: bool, ax_timeout: f32, ax_concurrency: usize) -> Result<()>
 
     let mut bindings: Vec<Binding> = Vec::new();
     for src in &sources {
+        let t_src = std::time::Instant::now();
         match src.scan() {
-            Ok(found) => bindings.extend(found),
+            Ok(found) => {
+                tracing::info!(
+                    source = src.name(),
+                    bindings = found.len(),
+                    elapsed_ms = t_src.elapsed().as_millis() as u64,
+                    "source scan complete",
+                );
+                bindings.extend(found);
+            }
             Err(e) => tracing::warn!(source = src.name(), error = %e, "source failed"),
         }
     }

@@ -29,8 +29,17 @@ pub fn who(
 
     let mut matches: Vec<Binding> = Vec::new();
     for src in &sources {
+        let t_src = std::time::Instant::now();
         match src.scan() {
-            Ok(found) => matches.extend(found.into_iter().filter(|b| b.combo == combo)),
+            Ok(found) => {
+                tracing::info!(
+                    source = src.name(),
+                    bindings = found.len(),
+                    elapsed_ms = t_src.elapsed().as_millis() as u64,
+                    "source scan complete",
+                );
+                matches.extend(found.into_iter().filter(|b| b.combo == combo));
+            }
             Err(e) => tracing::warn!(source = src.name(), error = %e, "source failed"),
         }
     }

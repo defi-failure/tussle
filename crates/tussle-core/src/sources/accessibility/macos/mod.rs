@@ -13,7 +13,6 @@ pub(super) fn scan(
     messaging_timeout: f32,
     max_concurrency: usize,
 ) -> Result<Vec<Binding>, ScanError> {
-    let started = std::time::Instant::now();
     if !is_trusted() {
         tracing::warn!("Accessibility permission missing — skipping menu enumeration");
         return Ok(Vec::new());
@@ -52,12 +51,6 @@ pub(super) fn scan(
         });
         bindings.extend(batch_bindings);
     }
-    tracing::info!(
-        bindings = bindings.len(),
-        apps = apps.len(),
-        elapsed_ms = started.elapsed().as_millis() as u64,
-        "accessibility scan complete",
-    );
     Ok(bindings)
 }
 
