@@ -16,6 +16,7 @@ pub fn scan(
     key_filter: Vec<String>,
     app_filter: Vec<String>,
     group_by: GroupBy,
+    no_pager: bool,
 ) -> Result<()> {
     let started = std::time::Instant::now();
 
@@ -97,6 +98,14 @@ pub fn scan(
     if bindings.is_empty() {
         println!("(no bindings found)");
         return Ok(());
+    }
+
+    // Pipe stdout through $PAGER (fallback `less`) when stdout is a TTY,
+    // so the long table is scrollable / searchable. `pager::setup()` is a
+    // no-op if stdout isn't a TTY, so pipes / redirects pass through. The
+    // user can fully opt out with `--no-pager`.
+    if !no_pager {
+        pager::Pager::with_default_pager("less -FRX").setup();
     }
 
     let mut builder = Builder::default();
