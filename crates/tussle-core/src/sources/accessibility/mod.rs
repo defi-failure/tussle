@@ -23,10 +23,10 @@ pub struct Accessibility {
     /// single non-responsive app from stalling the whole scan.
     pub messaging_timeout: f32,
     /// Defensive cap on the number of apps walked in parallel. `0` means
-    /// no cap (one OS thread per app, all at once). Default 128 — at the
-    /// typical 50–100 running apps this is effectively unbounded; only
-    /// pathological sessions (hundreds of processes) ever hit the chunked
-    /// path.
+    /// no cap (one OS thread per app, all at once). Default 512 — well
+    /// above any realistic running-app count (typical 50–100, extreme
+    /// sessions 200–400), so the chunked path is essentially a safety net
+    /// for pathological cases (600+ processes).
     pub max_concurrency: usize,
     /// Optional case-insensitive substring filter on bundle id / app name.
     /// Empty = scan every running app. Non-empty = retain only apps whose
@@ -40,7 +40,7 @@ impl Default for Accessibility {
     fn default() -> Self {
         Self {
             messaging_timeout: 1.0,
-            max_concurrency: 128,
+            max_concurrency: 512,
             bundle_filter: Vec::new(),
         }
     }

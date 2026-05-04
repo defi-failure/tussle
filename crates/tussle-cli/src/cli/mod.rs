@@ -31,11 +31,12 @@ struct Cli {
     ax_timeout: f32,
 
     /// Defensive cap on the number of apps walked in parallel. `0` means
-    /// no cap (one OS thread per app, all at once). Default 128 — at the
-    /// typical 50–100 running apps this is effectively unbounded; set
-    /// lower only if a session has hundreds of processes and you'd rather
-    /// pay extra wallclock than hold them all open at once.
-    #[arg(long, global = true, default_value_t = 128, value_name = "N")]
+    /// no cap (one OS thread per app, all at once). Default 512 — sized
+    /// to be effectively unbounded for any realistic session (typical
+    /// 50–100 apps, even extreme sessions 200–400). Set lower only if you
+    /// have a really pathological process count and would rather pay extra
+    /// wallclock than spawn that many sleeping threads at once.
+    #[arg(long, global = true, default_value_t = 512, value_name = "N")]
     ax_concurrency: usize,
 
     /// Increase log verbosity. `-v` INFO (high-level progress), `-vv` DEBUG
