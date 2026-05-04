@@ -61,6 +61,13 @@ mod platform {
         let runloop = CFRunLoop::get_current();
         let runloop_for_cb = runloop.clone();
 
+        // Without Input Monitoring permission the event tap silently never
+        // fires; CFRunLoopRun would block forever and Ctrl+C wouldn't even
+        // reach us (the tap drops it before the terminal sees it). Install
+        // a SIGINT handler that explicitly breaks the run loop.
+        let runloop_for_signal = runloop.clone();
+        let _ = ctrlc::set_handler(move || runloop_for_signal.stop());
+
         let tap = CGEventTap::new(
             CGEventTapLocation::HID,
             CGEventTapPlacement::HeadInsertEventTap,
