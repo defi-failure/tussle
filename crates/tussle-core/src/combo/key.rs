@@ -154,7 +154,9 @@ impl Key {
             //   NSBackspaceCharacter  = 0x08
             //   NSDeleteCharacter     = 0x7F   (Apple's main delete = Backspace)
             '\u{001B}' => Key::Named(NamedKey::Escape),
-            '\u{000D}' | '\u{0003}' => Key::Named(NamedKey::Return),
+            // 0x0A (LF) observed in real menus — Apple's NSText.h doesn't
+            // formally pin LF, but semantically it groups with Return/Enter.
+            '\u{000D}' | '\u{000A}' | '\u{0003}' => Key::Named(NamedKey::Return),
             '\u{0009}' => Key::Named(NamedKey::Tab),
             '\u{0008}' | '\u{007F}' => Key::Named(NamedKey::Backspace),
 
@@ -311,6 +313,14 @@ mod tests {
     #[test]
     fn from_char_normalizes_space() {
         assert_eq!(Key::from_char(' '), Key::Named(NamedKey::Space));
+    }
+
+    #[test]
+    fn from_char_normalizes_lf_to_return() {
+        // 0x0A turns up in real `kAXMenuItemCmdChar` reads alongside 0x0D;
+        // both are surfaced as Return.
+        assert_eq!(Key::from_char('\n'), Key::Named(NamedKey::Return));
+        assert_eq!(Key::from_char('\u{000A}'), Key::Named(NamedKey::Return));
     }
 
     #[test]
