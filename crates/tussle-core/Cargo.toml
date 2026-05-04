@@ -13,3 +13,6 @@ thiserror = "2.0.18"
 accessibility = "0.2.0"
 accessibility-sys = "0.2.0"
 core-foundation = "0.10.1"
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", features = ["NSRunningApplication", "NSWorkspace"] }
+objc2-foundation = { version = "0.3.2", features = ["NSString", "NSArray"] }
