@@ -45,14 +45,6 @@ struct Cli {
     #[arg(short, long, global = true, action = ArgAction::Count)]
     verbose: u8,
 
-    /// Disable the auto-pager. By default, when stdout is a terminal and
-    /// the table view is being printed, output is piped through `$PAGER`
-    /// (fallback `less`) so long results are scrollable. Use `--no-pager`
-    /// to dump straight to stdout. Implicitly off when `--json` is set or
-    /// stdout is redirected (a pipe / file).
-    #[arg(long, global = true)]
-    no_pager: bool,
-
     #[command(subcommand)]
     command: Command,
 }
@@ -108,15 +100,7 @@ pub fn run() -> Result<()> {
             key,
             app,
             group_by,
-        } => commands::scan::scan(
-            json,
-            cli.ax_timeout,
-            cli.ax_concurrency,
-            key,
-            app,
-            group_by,
-            cli.no_pager,
-        ),
+        } => commands::scan::scan(json, cli.ax_timeout, cli.ax_concurrency, key, app, group_by),
         Command::Who { combo, json } => {
             commands::who::who(combo, json, cli.ax_timeout, cli.ax_concurrency)
         }
