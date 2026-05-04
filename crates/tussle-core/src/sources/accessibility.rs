@@ -73,9 +73,8 @@ mod platform {
 
     use accessibility_sys::{
         AXError, AXUIElementCopyAttributeValue, AXUIElementCreateApplication, AXUIElementRef,
-        AXUIElementSetMessagingTimeout, kAXChildrenAttribute, kAXErrorSuccess,
-        kAXMenuBarAttribute, kAXMenuItemCmdCharAttribute, kAXMenuItemCmdModifiersAttribute,
-        kAXTitleAttribute,
+        AXUIElementSetMessagingTimeout, kAXChildrenAttribute, kAXErrorSuccess, kAXMenuBarAttribute,
+        kAXMenuItemCmdCharAttribute, kAXMenuItemCmdModifiersAttribute, kAXTitleAttribute,
     };
     use core_foundation::array::CFArray;
     use core_foundation::base::{CFTypeRef, TCFType};

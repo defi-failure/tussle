@@ -90,9 +90,7 @@ impl SystemActionKind {
             Self::MissionControl => {
                 Some("System Settings → Keyboard → Keyboard Shortcuts… → Mission Control")
             }
-            Self::ChangeInputSource => {
-                Some("System Settings → Keyboard → Press 🌐 key")
-            }
+            Self::ChangeInputSource => Some("System Settings → Keyboard → Press 🌐 key"),
             Self::Unknown => None,
         }
     }
