@@ -12,6 +12,12 @@ use tussle_core::{Binding, BindingSource, KeyCombo, Source};
 #[derive(Parser)]
 #[command(name = "tussle", version, about = "macOS hotkey conflict resolver")]
 struct Cli {
+    /// Per-app Accessibility messaging timeout, in seconds. Caps how long
+    /// a single non-responsive app can stall the scan. Set to `0` to use
+    /// the macOS default (~6s).
+    #[arg(long, global = true, default_value_t = 1.0, value_name = "SECS")]
+    ax_timeout: f32,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -39,13 +45,13 @@ enum Command {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Scan { json } => scan(json),
-        Command::Who { combo, json } => who(combo, json),
+        Command::Scan { json } => scan(json, cli.ax_timeout),
+        Command::Who { combo, json } => who(combo, json, cli.ax_timeout),
     }
 }
 
-fn scan(as_json: bool) -> Result<()> {
-    let sources = default_sources()?;
+fn scan(as_json: bool, ax_timeout: f32) -> Result<()> {
+    let sources = default_sources(ax_timeout)?;
 
     if !accessibility::is_trusted() {
         eprintln!(
@@ -83,7 +89,7 @@ fn scan(as_json: bool) -> Result<()> {
     Ok(())
 }
 
-fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
+fn who(combo_arg: Option<String>, as_json: bool, ax_timeout: f32) -> Result<()> {
     let combo = match combo_arg {
         Some(text) => KeyCombo::parse(&text).with_context(|| format!("parsing combo {text:?}"))?,
         None => {
@@ -105,7 +111,7 @@ fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
         }
     };
 
-    let sources = default_sources()?;
+    let sources = default_sources(ax_timeout)?;
 
     if !accessibility::is_trusted() {
         eprintln!(
@@ -148,7 +154,7 @@ fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
 ///
 /// Each source is constructed with paths/configuration the CLI looks up via
 /// `dirs`; `tussle-core` itself stays filesystem-agnostic.
-fn default_sources() -> Result<Vec<Box<dyn Source>>> {
+fn default_sources(ax_timeout: f32) -> Result<Vec<Box<dyn Source>>> {
     let prefs = dirs::preference_dir().context("could not locate user preferences directory")?;
 
     Ok(vec![
@@ -156,7 +162,7 @@ fn default_sources() -> Result<Vec<Box<dyn Source>>> {
             prefs.join("com.apple.symbolichotkeys.plist"),
         )),
         Box::new(AppMenuOverrides::new(prefs.clone())),
-        Box::new(Accessibility::default()),
+        Box::new(Accessibility::new(ax_timeout)),
     ])
 }
 
