@@ -28,6 +28,15 @@ pub(super) fn list_running_apps() -> Vec<RunningApp> {
         if app.activationPolicy() == NSApplicationActivationPolicy::Prohibited {
             continue;
         }
+        // Skip apps with no resolvable bundle. Real .app/.xpc processes
+        // always expose a `bundleURL`; the rare ones that don't are
+        // sandbox-locked helpers (notably `com.apple.WebKit.WebContent`,
+        // whose `executableURL` is also faked to a relative path under the
+        // current working directory). They have no menu bar but happily
+        // soak up the AX messaging timeout.
+        if app.bundleURL().is_none() {
+            continue;
+        }
         if let Some(url) = app.executableURL()
             && let Some(path) = url.path()
             && path.to_string().contains("/XPCServices/")
