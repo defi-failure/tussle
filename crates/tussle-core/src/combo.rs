@@ -187,12 +187,17 @@ impl Key {
             '\u{2196}' => Key::Named(NamedKey::Home),
             '\u{2198}' => Key::Named(NamedKey::End),
 
-            // C0 control chars (AppKit/NSText.h). 0x7F is NSDeleteCharacter
-            // — Apple's main "delete" key, semantically Backspace.
+            // C0 control chars (AppKit/NSText.h):
+            //   ESC                   = 0x1B
+            //   NSEnterCharacter      = 0x03   (numeric-keypad enter)
+            //   NSReturnCharacter     = 0x0D
+            //   NSTabCharacter        = 0x09
+            //   NSBackspaceCharacter  = 0x08
+            //   NSDeleteCharacter     = 0x7F   (Apple's main delete = Backspace)
             '\u{001B}' => Key::Named(NamedKey::Escape),
-            '\u{000D}' | '\u{0003}' => Key::Named(NamedKey::Return), // NSReturnCharacter / NSEnterCharacter
-            '\u{0009}' => Key::Named(NamedKey::Tab),                 // NSTabCharacter
-            '\u{0008}' | '\u{007F}' => Key::Named(NamedKey::Backspace), // NSBackspaceCharacter / NSDeleteCharacter
+            '\u{000D}' | '\u{0003}' => Key::Named(NamedKey::Return),
+            '\u{0009}' => Key::Named(NamedKey::Tab),
+            '\u{0008}' | '\u{007F}' => Key::Named(NamedKey::Backspace),
 
             // NSText PUA function-key constants from AppKit/NSEvent.h:
             //   NSUpArrowFunctionKey    = 0xF700
