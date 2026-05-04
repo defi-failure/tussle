@@ -117,9 +117,20 @@ mod platform {
         let mut out = Vec::with_capacity(apps.len());
         for app in apps.iter() {
             // Skip Prohibited: XPC services and helper processes (e.g.
-            // WebKit.WebContent, *PrivateProvider) have no menu bar but
-            // still respond to AX queries — by stalling until timeout.
+            // *PrivateProvider) have no menu bar but still respond to AX
+            // queries — by stalling until timeout.
             if app.activationPolicy() == NSApplicationActivationPolicy::Prohibited {
+                continue;
+            }
+            // Skip Apple-style XPC services. Some (notably WebKit.WebContent)
+            // declare activationPolicy = Regular so they can host UI in their
+            // own process, but they have no menu bar — and they're stalled
+            // most of the time, hitting the timeout. The standard XPC bundle
+            // layout puts them under `…/XPCServices/<id>.xpc/…`.
+            if let Some(url) = app.executableURL()
+                && let Some(path) = url.path()
+                && path.to_string().contains("/XPCServices/")
+            {
                 continue;
             }
             out.push(RunningApp {
