@@ -50,11 +50,21 @@ pub fn scan(
     // (SymbolicHotkeys, NSUserKeyEquivalents) honor it. Accessibility has
     // already pruned unmatched apps before walking, so this is a no-op for
     // its rows — it's here for correctness, not perf.
+    //
+    // Match against both `owner()` (display name, often localized — e.g.
+    // "访达" on Chinese macOS) and `bundle_id()` (reverse-DNS id, always
+    // English — e.g. "com.apple.finder"). Without the bundle-id leg,
+    // `--app finder` would silently miss every app with a localized name
+    // even though the underlying scan layer already accepts it.
     if !app_filter.is_empty() {
         let filter_lc: Vec<String> = app_filter.iter().map(|s| s.to_lowercase()).collect();
         bindings.retain(|b| {
             let owner_lc = b.source.owner().to_lowercase();
-            filter_lc.iter().any(|f| owner_lc.contains(f))
+            let bundle_lc = b.source.bundle_id().map(str::to_lowercase);
+            filter_lc.iter().any(|f| {
+                owner_lc.contains(f)
+                    || bundle_lc.as_deref().is_some_and(|s| s.contains(f))
+            })
         });
     }
 

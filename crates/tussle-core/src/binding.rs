@@ -62,6 +62,19 @@ impl BindingSource {
             } => app_name.as_deref().unwrap_or(bundle_id),
         }
     }
+
+    /// The owning app's bundle identifier, when there is one. `None` for
+    /// system-level entries (e.g. SymbolicHotkey). Useful for filters that
+    /// want to match by reverse-DNS id (`com.apple.finder`) regardless of
+    /// the localized display name (`访达` on Chinese macOS, `Finder` on
+    /// English).
+    pub fn bundle_id(&self) -> Option<&str> {
+        match self {
+            BindingSource::SystemSymbolicHotkey { .. } => None,
+            BindingSource::AppMenuOverride { bundle_id, .. } => Some(bundle_id),
+            BindingSource::AppMenuItem { bundle_id, .. } => Some(bundle_id),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -101,5 +114,27 @@ mod tests {
             menu_path: vec!["Edit".into()],
         };
         assert_eq!(s.owner(), "com.example.unknown");
+    }
+
+    #[test]
+    fn bundle_id_is_none_for_system_hotkey() {
+        let s = BindingSource::SystemSymbolicHotkey { id: 64 };
+        assert!(s.bundle_id().is_none());
+    }
+
+    #[test]
+    fn bundle_id_returns_id_for_app_sources() {
+        let menu = BindingSource::AppMenuItem {
+            bundle_id: "com.apple.finder".into(),
+            app_name: Some("访达".into()),
+            menu_path: vec![],
+        };
+        assert_eq!(menu.bundle_id(), Some("com.apple.finder"));
+
+        let override_ = BindingSource::AppMenuOverride {
+            bundle_id: "com.apple.TextEdit".into(),
+            menu_item: "New".into(),
+        };
+        assert_eq!(override_.bundle_id(), Some("com.apple.TextEdit"));
     }
 }
