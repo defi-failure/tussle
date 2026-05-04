@@ -104,6 +104,9 @@ pub fn scan(
     for b in &bindings {
         builder.push_record([&format!("{}", b.combo), b.source.owner(), &b.label]);
     }
+    // Blank line so the table doesn't visually butt up against any
+    // preceding stderr log lines when both share the same TTY.
+    println!();
     println!("{}", builder.build().with(Style::psql()));
     Ok(())
 }
