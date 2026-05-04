@@ -9,6 +9,7 @@ use crate::cli::output::emit_json;
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
 pub fn scan(as_json: bool, ax_timeout: f32, ax_concurrency: usize) -> Result<()> {
+    let started = std::time::Instant::now();
     let sources = default_sources(ax_timeout, ax_concurrency)?;
     warn_if_no_accessibility();
 
@@ -16,9 +17,14 @@ pub fn scan(as_json: bool, ax_timeout: f32, ax_concurrency: usize) -> Result<()>
     for src in &sources {
         match src.scan() {
             Ok(found) => bindings.extend(found),
-            Err(e) => eprintln!("{}: {:#}", src.name(), e),
+            Err(e) => tracing::warn!(source = src.name(), error = %e, "source failed"),
         }
     }
+    tracing::info!(
+        bindings = bindings.len(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "scan complete",
+    );
 
     if as_json {
         return emit_json(&bindings);

@@ -17,6 +17,7 @@ use super::running_apps::RunningApp;
 const MAX_MENU_DEPTH: usize = 16;
 
 pub(super) fn walk_app_menus(app: &RunningApp, messaging_timeout: f32) -> Vec<Binding> {
+    let started = std::time::Instant::now();
     let element = unsafe { AXUIElementCreateApplication(app.pid) };
     if element.is_null() {
         return Vec::new();
@@ -44,6 +45,13 @@ pub(super) fn walk_app_menus(app: &RunningApp, messaging_timeout: f32) -> Vec<Bi
     }
 
     unsafe { core_foundation::base::CFRelease(element as _) };
+
+    tracing::debug!(
+        bundle = app.bundle_id.as_deref().unwrap_or("?"),
+        bindings = bindings.len(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "walked app",
+    );
     bindings
 }
 

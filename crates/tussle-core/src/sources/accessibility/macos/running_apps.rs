@@ -24,8 +24,12 @@ pub(super) fn list_running_apps() -> Vec<RunningApp> {
     let workspace = NSWorkspace::sharedWorkspace();
     let apps = workspace.runningApplications();
     let mut out = Vec::with_capacity(apps.len());
+    let mut skipped_prohibited = 0usize;
+    let mut skipped_no_bundle = 0usize;
+    let mut skipped_xpc = 0usize;
     for app in apps.iter() {
         if app.activationPolicy() == NSApplicationActivationPolicy::Prohibited {
+            skipped_prohibited += 1;
             continue;
         }
         // Skip apps with no resolvable bundle. Real .app/.xpc processes
@@ -35,12 +39,14 @@ pub(super) fn list_running_apps() -> Vec<RunningApp> {
         // current working directory). They have no menu bar but happily
         // soak up the AX messaging timeout.
         if app.bundleURL().is_none() {
+            skipped_no_bundle += 1;
             continue;
         }
         if let Some(url) = app.executableURL()
             && let Some(path) = url.path()
             && path.to_string().contains("/XPCServices/")
         {
+            skipped_xpc += 1;
             continue;
         }
         out.push(RunningApp {
@@ -49,5 +55,12 @@ pub(super) fn list_running_apps() -> Vec<RunningApp> {
             app_name: app.localizedName().map(|s| s.to_string()),
         });
     }
+    tracing::debug!(
+        kept = out.len(),
+        skipped_prohibited,
+        skipped_no_bundle,
+        skipped_xpc,
+        "filtered running apps",
+    );
     out
 }

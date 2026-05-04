@@ -31,9 +31,14 @@ pub fn who(
     for src in &sources {
         match src.scan() {
             Ok(found) => matches.extend(found.into_iter().filter(|b| b.combo == combo)),
-            Err(e) => eprintln!("{}: {:#}", src.name(), e),
+            Err(e) => tracing::warn!(source = src.name(), error = %e, "source failed"),
         }
     }
+    tracing::info!(
+        combo = %combo,
+        matches = matches.len(),
+        "lookup complete",
+    );
 
     if as_json {
         return emit_json(&matches);
