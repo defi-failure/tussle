@@ -189,7 +189,7 @@ mod platform {
         let mask = copy_i64(item, kAXMenuItemCmdModifiersAttribute).unwrap_or(0);
         Some(KeyCombo {
             modifiers: decode_ax_modifiers(mask) | Modifiers::CMD,
-            key: Key::Char(first_char.to_ascii_lowercase()),
+            key: Key::from_char(first_char),
         })
     }
 
