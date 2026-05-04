@@ -50,15 +50,19 @@ pub struct SystemAction {
 /// here come from two sources, treated separately so we never present a
 /// guess as fact:
 ///
-///   - Verified by us: `ChangeInputSource = 0xB3`.
+///   - Verified by us: `0xA0 Mission Control` (fn+F3 default),
+///     `0xB3 Change Input Source` (🌐 key).
 ///   - Reported by community lists (eegrok/jimratliff GitHub gists), not yet
-///     verified on a machine we control: `0x81 Spotlight`, `0xA0 Mission
-///     Control`, `0xB0 Dictation`, `0xB2 Do Not Disturb`. We deliberately
-///     do **not** add these to [`classify_extended_vk`] yet — they would
-///     turn into `Unknown` and surface honestly. Promote them as we
-///     observe them ourselves.
+///     verified on a machine we control: `0x81 Spotlight`,
+///     `0xB0 Dictation`, `0xB2 Do Not Disturb`. We deliberately do **not**
+///     add these to [`classify_extended_vk`] yet — they would turn into
+///     `Unknown` and surface honestly. Promote them as we observe them
+///     ourselves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SystemActionKind {
+    /// Mission Control. Default trigger is fn+F3 on Apple keyboards.
+    /// Verified vk = `0xA0`.
+    MissionControl,
     /// 🌐 key pressed when `System Settings → Keyboard → Press 🌐 key` is
     /// set to "Change Input Source". Verified vk = `0xB3`.
     ChangeInputSource,
@@ -73,6 +77,7 @@ impl SystemActionKind {
     /// classification rather than a key name.
     pub fn name(&self) -> &'static str {
         match self {
+            Self::MissionControl => "Mission Control",
             Self::ChangeInputSource => "Change Input Source",
             Self::Unknown => "unrecognized macOS extended keycode",
         }
@@ -82,6 +87,9 @@ impl SystemActionKind {
     /// known. `None` for unclassified codes.
     pub fn source_hint(&self) -> Option<&'static str> {
         match self {
+            Self::MissionControl => {
+                Some("System Settings → Keyboard → Keyboard Shortcuts… → Mission Control")
+            }
             Self::ChangeInputSource => {
                 Some("System Settings → Keyboard → Press 🌐 key")
             }
@@ -103,6 +111,7 @@ pub fn classify_extended_vk(vk: u16) -> Option<SystemAction> {
         return None;
     }
     let kind = match vk {
+        0xA0 => SystemActionKind::MissionControl,
         0xB3 => SystemActionKind::ChangeInputSource,
         _ => SystemActionKind::Unknown,
     };
@@ -309,6 +318,13 @@ mod tests {
         let action = classify_extended_vk(0xB3).expect("0xB3 must classify");
         assert_eq!(action.vk, 0xB3);
         assert_eq!(action.kind, SystemActionKind::ChangeInputSource);
+    }
+
+    #[test]
+    fn classify_returns_mission_control_for_0xa0() {
+        let action = classify_extended_vk(0xA0).expect("0xA0 must classify");
+        assert_eq!(action.vk, 0xA0);
+        assert_eq!(action.kind, SystemActionKind::MissionControl);
     }
 
     #[test]
