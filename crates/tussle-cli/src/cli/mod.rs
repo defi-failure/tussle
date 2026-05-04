@@ -82,8 +82,14 @@ fn init_tracing(verbosity: u8) {
         2 => "debug",
         _ => "trace",
     };
+    // The binary's crate name is `tussle` (set via `[[bin]] name = "tussle"`
+    // in tussle-cli's Cargo.toml), not `tussle_cli` — so events emitted from
+    // cli/* report a `tussle::*` target. Filter both that and the core lib.
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new(format!("tussle_core={lvl},tussle_cli={lvl}", lvl = default_level))
+        EnvFilter::new(format!(
+            "tussle={lvl},tussle_core={lvl}",
+            lvl = default_level
+        ))
     });
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
