@@ -10,6 +10,18 @@
 
 use crate::{KeyCombo, Modifiers, ScanError};
 
+/// What [`capture_one`] produced.
+///
+/// A KeyDown event is either a normal hotkey-shaped combination (modifiers
+/// plus a `kVK_*`-range key) or a macOS-internal system-action dispatch
+/// code (`vk >= 0x80`); see [`SystemAction`] for why those are surfaced
+/// separately rather than wrapped into `KeyCombo`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Captured {
+    Combo(KeyCombo),
+    SystemAction(SystemAction),
+}
+
 /// A macOS extended-keycode dispatch event captured in the KeyDown channel.
 ///
 /// macOS occasionally synthesizes KeyDown events whose virtual keycode is
@@ -97,14 +109,16 @@ pub fn classify_extended_vk(vk: u16) -> Option<SystemAction> {
     Some(SystemAction { vk, kind })
 }
 
-/// Block until the user presses a non-modifier key, returning the resulting
-/// [`KeyCombo`]. The captured event is consumed, not propagated to whichever
-/// app or shortcut would otherwise have received it.
+/// Block until the user presses a non-modifier key, returning either the
+/// resulting [`KeyCombo`] or — for macOS system-action dispatch codes —
+/// a [`SystemAction`] wrapped in [`Captured`]. The captured event is
+/// consumed, not propagated to whichever app or shortcut would otherwise
+/// have received it.
 ///
 /// `on_modifiers_changed` is called every time a modifier key is pressed or
 /// released while the tap is active, so the caller can render live feedback
 /// (e.g. "Holding: cmd+shift...") before the final non-modifier key arrives.
-pub fn capture_one_combo<F>(on_modifiers_changed: F) -> Result<KeyCombo, ScanError>
+pub fn capture_one<F>(on_modifiers_changed: F) -> Result<Captured, ScanError>
 where
     F: Fn(Modifiers) + Send + 'static,
 {
@@ -138,7 +152,7 @@ mod platform {
         CallbackResult, EventField,
     };
 
-    use super::capture_error;
+    use super::{Captured, capture_error, classify_extended_vk};
     use crate::{Key, KeyCombo, Modifiers, ScanError};
 
     // FFI binding to IOKit's `IOHIDRequestAccess`. From
@@ -174,7 +188,7 @@ mod platform {
     const FLAG_COMMAND: u64 = 1 << 20;
     const FLAG_FUNCTION: u64 = 1 << 23;
 
-    pub fn capture<F>(on_modifiers_changed: F) -> Result<KeyCombo, ScanError>
+    pub fn capture<F>(on_modifiers_changed: F) -> Result<Captured, ScanError>
     where
         F: Fn(Modifiers) + Send + 'static,
     {
@@ -191,7 +205,7 @@ mod platform {
             ));
         }
 
-        let captured: Arc<Mutex<Option<KeyCombo>>> = Arc::new(Mutex::new(None));
+        let captured: Arc<Mutex<Option<Captured>>> = Arc::new(Mutex::new(None));
         let captured_for_cb = Arc::clone(&captured);
 
         let runloop = CFRunLoop::get_current();
@@ -219,12 +233,15 @@ mod platform {
 
                 // KeyDown of a non-modifier key — finalize and exit.
                 let vk = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
-                let combo = KeyCombo {
-                    modifiers,
-                    key: Key::from_vk(vk),
+                let result = match classify_extended_vk(vk) {
+                    Some(action) => Captured::SystemAction(action),
+                    None => Captured::Combo(KeyCombo {
+                        modifiers,
+                        key: Key::from_vk(vk),
+                    }),
                 };
                 if let Ok(mut slot) = captured_for_cb.lock() {
-                    *slot = Some(combo);
+                    *slot = Some(result);
                 }
                 runloop_for_cb.stop();
                 CallbackResult::Drop
