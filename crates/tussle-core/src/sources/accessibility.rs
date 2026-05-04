@@ -64,7 +64,7 @@ mod platform {
     use core_foundation::base::{CFTypeRef, TCFType};
     use core_foundation::number::CFNumber;
     use core_foundation::string::CFString;
-    use objc2_app_kit::NSWorkspace;
+    use objc2_app_kit::{NSApplicationActivationPolicy, NSWorkspace};
 
     use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, ScanError};
 
@@ -99,6 +99,12 @@ mod platform {
         let apps = workspace.runningApplications();
         let mut out = Vec::with_capacity(apps.len());
         for app in apps.iter() {
+            // Skip Prohibited: XPC services and helper processes (e.g.
+            // WebKit.WebContent, *PrivateProvider) have no menu bar but
+            // still respond to AX queries — by stalling until timeout.
+            if app.activationPolicy() == NSApplicationActivationPolicy::Prohibited {
+                continue;
+            }
             out.push(RunningApp {
                 pid: app.processIdentifier(),
                 bundle_id: app.bundleIdentifier().map(|s| s.to_string()),
