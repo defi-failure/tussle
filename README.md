@@ -25,7 +25,7 @@ disable to free a combo.
 No prebuilt binaries yet. Build from source:
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/defi-failure/tussle.git
 cd tussle
 cargo install --path crates/tussle-cli
 ```
