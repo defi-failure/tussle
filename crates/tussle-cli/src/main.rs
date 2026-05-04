@@ -90,8 +90,19 @@ fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
         }
         None => {
             eprintln!("Press the hotkey to look up (Ctrl+C to abort)...");
-            let combo = capture::capture_one_combo().context("capturing keystroke")?;
-            eprintln!("Captured: {combo} — looking up...");
+            let combo = capture::capture_one_combo(|mods| {
+                use std::io::Write;
+                let mut stderr = std::io::stderr().lock();
+                // \x1B[2K clears the entire line; \r returns the cursor.
+                if mods.is_empty() {
+                    let _ = write!(stderr, "\r\x1B[2K");
+                } else {
+                    let _ = write!(stderr, "\r\x1B[2KHolding: {mods}+");
+                }
+                let _ = stderr.flush();
+            })
+            .context("capturing keystroke")?;
+            eprintln!("\r\x1B[2KCaptured: {combo} — looking up...");
             combo
         }
     };

@@ -8,18 +8,26 @@
 //! Requires Input Monitoring permission (System Settings → Privacy &
 //! Security → Input Monitoring), which is separate from Accessibility.
 
-use crate::{KeyCombo, ScanError};
+use crate::{KeyCombo, Modifiers, ScanError};
 
 /// Block until the user presses a non-modifier key, returning the resulting
 /// [`KeyCombo`]. The captured event is consumed, not propagated to whichever
 /// app or shortcut would otherwise have received it.
-pub fn capture_one_combo() -> Result<KeyCombo, ScanError> {
+///
+/// `on_modifiers_changed` is called every time a modifier key is pressed or
+/// released while the tap is active, so the caller can render live feedback
+/// (e.g. "Holding: cmd+shift...") before the final non-modifier key arrives.
+pub fn capture_one_combo<F>(on_modifiers_changed: F) -> Result<KeyCombo, ScanError>
+where
+    F: Fn(Modifiers) + Send + 'static,
+{
     #[cfg(target_os = "macos")]
     {
-        platform::capture()
+        platform::capture(on_modifiers_changed)
     }
     #[cfg(not(target_os = "macos"))]
     {
+        let _ = on_modifiers_changed;
         Err(capture_error("interactive capture is only supported on macOS"))
     }
 }
@@ -72,7 +80,10 @@ mod platform {
     const FLAG_COMMAND: u64 = 1 << 20; //   kCGEventFlagMaskCommand
     const FLAG_FUNCTION: u64 = 1 << 23; //  kCGEventFlagMaskSecondaryFn
 
-    pub fn capture() -> Result<KeyCombo, ScanError> {
+    pub fn capture<F>(on_modifiers_changed: F) -> Result<KeyCombo, ScanError>
+    where
+        F: Fn(Modifiers) + Send + 'static,
+    {
         // Trigger the Input Monitoring TCC dialog on first run (or read the
         // cached granted/denied state). Without this, CGEventTap silently
         // installs but never fires events when permission is missing.
@@ -103,14 +114,21 @@ mod platform {
             CGEventTapLocation::HID,
             CGEventTapPlacement::HeadInsertEventTap,
             CGEventTapOptions::Default,
-            vec![CGEventType::KeyDown],
-            move |_proxy, _etype, event| {
+            vec![CGEventType::KeyDown, CGEventType::FlagsChanged],
+            move |_proxy, etype, event| {
+                let modifiers = decode_cg_flags(event.get_flags().bits());
+
+                if matches!(etype, CGEventType::FlagsChanged) {
+                    on_modifiers_changed(modifiers);
+                    return CallbackResult::Drop;
+                }
+
+                // KeyDown of a non-modifier key — finalize and exit.
                 let vk =
                     event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
-                let flags = event.get_flags().bits();
                 let combo = KeyCombo {
-                    modifiers: decode_cg_flags(flags),
-                    key: vk_to_key(vk),
+                    modifiers,
+                    key: Key::from_vk(vk),
                 };
                 if let Ok(mut slot) = captured_for_cb.lock() {
                     *slot = Some(combo);
@@ -161,7 +179,4 @@ mod platform {
         m
     }
 
-    fn vk_to_key(vk: u16) -> Key {
-        Key::from_vk(vk)
-    }
 }
