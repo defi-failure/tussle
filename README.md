@@ -101,4 +101,4 @@ Early. macOS only.
 
 ## License
 
-TBD.
+MIT — see [LICENSE](LICENSE).
