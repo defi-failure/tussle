@@ -91,13 +91,13 @@ Early. macOS only.
 
 ## TODO
 
+- Pre-built binaries on GitHub Releases.
 - Third-party launcher parsers: Karabiner, Raycast, BetterTouchTool,
   Hammerspoon, Keyboard Maestro.
-- `tussle diff` — what changed since the last scan.
 - Persistent cache for instant repeat lookups.
-- Pre-built binaries on GitHub Releases.
+- `tussle diff` — what changed since the last scan.
 - Homebrew tap.
-- GUI (likely a SwiftUI menu-bar app).
+- GUI (likely a SwiftUI menu-bar app?).
 
 ## License
 
