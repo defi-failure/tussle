@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use tabled::builder::Builder;
@@ -6,7 +6,7 @@ use tabled::settings::Style;
 use tussle_core::sources::accessibility::{self, Accessibility};
 use tussle_core::sources::nsuserkeyequivalents::AppMenuOverrides;
 use tussle_core::sources::symbolichotkeys::SymbolicHotkeys;
-use tussle_core::{Binding, BindingSource, Source};
+use tussle_core::{Binding, BindingSource, KeyCombo, Source};
 
 #[derive(Parser)]
 #[command(name = "tussle", version, about = "macOS hotkey conflict resolver")]
@@ -23,12 +23,23 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Look up which sources own a key combination.
+    Who {
+        /// Combo to look up, e.g. `cmd+opt+b`. Omit to enter interactive
+        /// capture mode (not yet implemented).
+        combo: Option<String>,
+
+        /// Emit JSON instead of a human-readable table.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Scan { json } => scan(json),
+        Command::Who { combo, json } => who(combo, json),
     }
 }
 
@@ -66,6 +77,52 @@ fn scan(as_json: bool) -> Result<()> {
     builder.push_record(["Combo", "Owner", "Action"]);
     for b in &bindings {
         builder.push_record([&format!("{}", b.combo), b.source.owner(), &b.label]);
+    }
+    println!("{}", builder.build().with(Style::psql()));
+    Ok(())
+}
+
+fn who(combo_arg: Option<String>, as_json: bool) -> Result<()> {
+    let Some(combo_text) = combo_arg else {
+        bail!("interactive capture mode is not yet implemented; pass a combo like `tussle who cmd+opt+b`");
+    };
+    let combo = KeyCombo::parse(&combo_text)
+        .with_context(|| format!("parsing combo {combo_text:?}"))?;
+
+    let sources = default_sources()?;
+
+    if !accessibility::is_trusted() {
+        eprintln!(
+            "note: tussle does not currently have Accessibility permission, \
+             so app menu shortcuts will be missing. Grant access in \
+             System Settings → Privacy & Security → Accessibility, then re-run."
+        );
+    }
+
+    let mut matches: Vec<Binding> = Vec::new();
+    for src in &sources {
+        match src.scan() {
+            Ok(found) => matches.extend(found.into_iter().filter(|b| b.combo == combo)),
+            Err(e) => eprintln!("{}: {:#}", src.name(), e),
+        }
+    }
+
+    if as_json {
+        let rows: Vec<BindingJson> = matches.iter().map(BindingJson::from).collect();
+        println!("{}", serde_json::to_string_pretty(&rows)?);
+        return Ok(());
+    }
+
+    if matches.is_empty() {
+        println!("nothing bound to {combo}");
+        return Ok(());
+    }
+
+    println!("{combo} is held by:");
+    let mut builder = Builder::default();
+    builder.push_record(["Owner", "Action"]);
+    for b in &matches {
+        builder.push_record([b.source.owner(), b.label.as_str()]);
     }
     println!("{}", builder.build().with(Style::psql()));
     Ok(())
