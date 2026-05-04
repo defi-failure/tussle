@@ -22,19 +22,29 @@ pub struct Accessibility {
     /// leave the system default in place. Tight values (e.g. 1.0) prevent a
     /// single non-responsive app from stalling the whole scan.
     pub messaging_timeout: f32,
+    /// Defensive cap on the number of apps walked in parallel. `0` means
+    /// no cap (one OS thread per app, all at once). Default 128 — at the
+    /// typical 50–100 running apps this is effectively unbounded; only
+    /// pathological sessions (hundreds of processes) ever hit the chunked
+    /// path.
+    pub max_concurrency: usize,
 }
 
 impl Default for Accessibility {
     fn default() -> Self {
         Self {
             messaging_timeout: 1.0,
+            max_concurrency: 128,
         }
     }
 }
 
 impl Accessibility {
-    pub fn new(messaging_timeout: f32) -> Self {
-        Self { messaging_timeout }
+    pub fn new(messaging_timeout: f32, max_concurrency: usize) -> Self {
+        Self {
+            messaging_timeout,
+            max_concurrency,
+        }
     }
 }
 
@@ -46,7 +56,7 @@ impl Source for Accessibility {
     fn scan(&self) -> Result<Vec<Binding>, ScanError> {
         #[cfg(target_os = "macos")]
         {
-            macos::scan(self.messaging_timeout)
+            macos::scan(self.messaging_timeout, self.max_concurrency)
         }
         #[cfg(not(target_os = "macos"))]
         {

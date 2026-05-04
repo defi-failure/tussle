@@ -18,7 +18,10 @@ pub(super) fn default_sources(ax_timeout: f32) -> Result<Vec<Box<dyn Source>>> {
             prefs.join("com.apple.symbolichotkeys.plist"),
         )),
         Box::new(AppMenuOverrides::new(prefs.clone())),
-        Box::new(Accessibility::new(ax_timeout)),
+        Box::new(Accessibility::new(
+            ax_timeout,
+            Accessibility::default().max_concurrency,
+        )),
     ])
 }
 
