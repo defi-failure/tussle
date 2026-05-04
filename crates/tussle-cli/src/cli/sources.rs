@@ -10,7 +10,10 @@ use tussle_core::sources::symbolichotkeys::SymbolicHotkeys;
 ///
 /// Each source is constructed with paths/configuration the CLI looks up via
 /// `dirs`; `tussle-core` itself stays filesystem-agnostic.
-pub(super) fn default_sources(ax_timeout: f32) -> Result<Vec<Box<dyn Source>>> {
+pub(super) fn default_sources(
+    ax_timeout: f32,
+    ax_concurrency: usize,
+) -> Result<Vec<Box<dyn Source>>> {
     let prefs = dirs::preference_dir().context("could not locate user preferences directory")?;
 
     Ok(vec![
@@ -18,10 +21,7 @@ pub(super) fn default_sources(ax_timeout: f32) -> Result<Vec<Box<dyn Source>>> {
             prefs.join("com.apple.symbolichotkeys.plist"),
         )),
         Box::new(AppMenuOverrides::new(prefs.clone())),
-        Box::new(Accessibility::new(
-            ax_timeout,
-            Accessibility::default().max_concurrency,
-        )),
+        Box::new(Accessibility::new(ax_timeout, ax_concurrency)),
     ])
 }
 

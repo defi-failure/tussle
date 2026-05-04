@@ -10,7 +10,12 @@ use tussle_core::{Binding, KeyCombo};
 use crate::cli::output::emit_json;
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
-pub fn who(combo_arg: Option<String>, as_json: bool, ax_timeout: f32) -> Result<()> {
+pub fn who(
+    combo_arg: Option<String>,
+    as_json: bool,
+    ax_timeout: f32,
+    ax_concurrency: usize,
+) -> Result<()> {
     let combo = match combo_arg {
         Some(text) => KeyCombo::parse(&text).with_context(|| format!("parsing combo {text:?}"))?,
         None => match capture_interactively()? {
@@ -19,7 +24,7 @@ pub fn who(combo_arg: Option<String>, as_json: bool, ax_timeout: f32) -> Result<
         },
     };
 
-    let sources = default_sources(ax_timeout)?;
+    let sources = default_sources(ax_timeout, ax_concurrency)?;
     warn_if_no_accessibility();
 
     let mut matches: Vec<Binding> = Vec::new();

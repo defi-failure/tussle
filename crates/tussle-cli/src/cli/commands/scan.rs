@@ -8,8 +8,8 @@ use tussle_core::Binding;
 use crate::cli::output::emit_json;
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
-pub fn scan(as_json: bool, ax_timeout: f32) -> Result<()> {
-    let sources = default_sources(ax_timeout)?;
+pub fn scan(as_json: bool, ax_timeout: f32, ax_concurrency: usize) -> Result<()> {
+    let sources = default_sources(ax_timeout, ax_concurrency)?;
     warn_if_no_accessibility();
 
     let mut bindings: Vec<Binding> = Vec::new();

@@ -16,6 +16,14 @@ struct Cli {
     #[arg(long, global = true, default_value_t = 1.0, value_name = "SECS")]
     ax_timeout: f32,
 
+    /// Defensive cap on the number of apps walked in parallel. `0` means
+    /// no cap (one OS thread per app, all at once). Default 128 — at the
+    /// typical 50–100 running apps this is effectively unbounded; set
+    /// lower only if a session has hundreds of processes and you'd rather
+    /// pay extra wallclock than hold them all open at once.
+    #[arg(long, global = true, default_value_t = 128, value_name = "N")]
+    ax_concurrency: usize,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -44,7 +52,9 @@ enum Command {
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Scan { json } => commands::scan::scan(json, cli.ax_timeout),
-        Command::Who { combo, json } => commands::who::who(combo, json, cli.ax_timeout),
+        Command::Scan { json } => commands::scan::scan(json, cli.ax_timeout, cli.ax_concurrency),
+        Command::Who { combo, json } => {
+            commands::who::who(combo, json, cli.ax_timeout, cli.ax_concurrency)
+        }
     }
 }
