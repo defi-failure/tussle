@@ -2,11 +2,11 @@
 //! list every binding that claims it, in the order they would see the
 //! key, and say which one fires.
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use tabled::builder::Builder;
 use tabled::settings::Style;
-use tussle_core::capture::{self, Captured};
+use tussle_core::capture::{self, Captured, Probe, Reaction, ReactionKind};
 use tussle_core::{Binding, BindingSource, HotkeyIndex, KeyCombo, Winner};
 
 use crate::cli::output::{BindingJson, VerdictJson, emit_json, layer_label, report_warnings};
@@ -17,21 +17,52 @@ struct WhoJson<'a> {
     combo: String,
     verdict: VerdictJson<'a>,
     bindings: Vec<BindingJson<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    observed: Option<ObservedJson>,
 }
+
+/// What `--probe` saw after letting the key through.
+#[derive(Serialize)]
+struct ObservedJson {
+    settle_ms: u64,
+    reactions: Vec<ReactionJson>,
+    input_source_change: Option<(String, String)>,
+}
+
+#[derive(Serialize)]
+struct ReactionJson {
+    pid: i32,
+    app_name: Option<String>,
+    bundle_id: Option<String>,
+    kind: &'static str,
+    new_windows: usize,
+}
+
+/// How long `--probe` watches for reactions after the key.
+const PROBE_SETTLE: std::time::Duration = std::time::Duration::from_millis(800);
 
 pub fn who(
     combo_arg: Option<String>,
     as_json: bool,
+    probe: bool,
     ax_timeout: f32,
     ax_concurrency: usize,
     only: &[String],
 ) -> Result<()> {
+    if probe && combo_arg.is_some() {
+        bail!("--probe watches a key you press; leave the combo argument out");
+    }
+    let mut observed: Option<Probe> = None;
     let combo = match combo_arg {
         Some(text) => KeyCombo::parse(&text).with_context(|| format!("parsing combo {text:?}"))?,
-        None => match capture_interactively()? {
-            Some(c) => c,
-            None => return Ok(()),
-        },
+        None => {
+            let (captured, probed) = capture_interactively(probe)?;
+            observed = probed;
+            match captured {
+                Some(c) => c,
+                None => return Ok(()),
+            }
+        }
     };
 
     let sources = default_sources(ax_timeout, ax_concurrency, Vec::new(), only)?;
@@ -64,6 +95,7 @@ pub fn who(
                 .chain(off.iter())
                 .map(|b| BindingJson::from(*b))
                 .collect(),
+            observed: observed.as_ref().map(observed_json),
         });
     }
 
@@ -98,7 +130,66 @@ pub fn who(
     println!("{}", builder.build().with(Style::psql()));
     println!();
     println!("{}", describe(&combo, winner, &matches));
+    if let Some(probe) = &observed {
+        println!();
+        print!("{}", describe_probe(&combo, probe));
+    }
     Ok(())
+}
+
+fn observed_json(p: &Probe) -> ObservedJson {
+    ObservedJson {
+        settle_ms: PROBE_SETTLE.as_millis() as u64,
+        reactions: p
+            .reactions
+            .iter()
+            .map(|r| ReactionJson {
+                pid: r.pid,
+                app_name: r.app_name.clone(),
+                bundle_id: r.bundle_id.clone(),
+                kind: match r.kind {
+                    ReactionKind::Activated => "activated",
+                    ReactionKind::NewWindows(_) => "new_windows",
+                },
+                new_windows: match r.kind {
+                    ReactionKind::NewWindows(n) => n,
+                    ReactionKind::Activated => 0,
+                },
+            })
+            .collect(),
+        input_source_change: p.input_source_change.clone(),
+    }
+}
+
+/// What happened in the `PROBE_SETTLE` window after the key went through.
+fn describe_probe(combo: &KeyCombo, probe: &Probe) -> String {
+    let mut out = format!(
+        "Observed within {} ms of letting {combo} through:\n",
+        PROBE_SETTLE.as_millis()
+    );
+    if let Some((before, after)) = &probe.input_source_change {
+        out.push_str(&format!("  input source changed: {before} -> {after}\n"));
+    }
+    for r in &probe.reactions {
+        out.push_str(&format!("  {}\n", describe_reaction(r)));
+    }
+    if probe.reactions.is_empty() && probe.input_source_change.is_none() {
+        out.push_str("  nothing came to the front, no window opened, input source unchanged\n");
+    }
+    out
+}
+
+fn describe_reaction(r: &Reaction) -> String {
+    let who = r
+        .app_name
+        .clone()
+        .or_else(|| r.bundle_id.clone())
+        .unwrap_or_else(|| format!("pid {}", r.pid));
+    match r.kind {
+        ReactionKind::Activated => format!("{who} came to the front"),
+        ReactionKind::NewWindows(1) => format!("{who} opened a window"),
+        ReactionKind::NewWindows(n) => format!("{who} opened {n} windows"),
+    }
 }
 
 /// One sentence on who gets the key.
@@ -144,9 +235,13 @@ fn describe(combo: &KeyCombo, winner: Winner<'_>, matches: &[&Binding]) -> Strin
 ///   - `Ok(None)` when the user pressed a macOS system action — we already
 ///     printed the explanation and the caller should bail out cleanly,
 ///   - `Err(_)` on capture failure (no Input Monitoring permission, etc.).
-fn capture_interactively() -> Result<Option<KeyCombo>> {
-    eprintln!("Press the hotkey to look up (Ctrl+C to abort)...");
-    let captured = capture::capture_one(|mods| {
+fn capture_interactively(probe: bool) -> Result<(Option<KeyCombo>, Option<Probe>)> {
+    if probe {
+        eprintln!("Press the hotkey to look up; it will go through (Ctrl+C to abort)...");
+    } else {
+        eprintln!("Press the hotkey to look up (Ctrl+C to abort)...");
+    }
+    let feedback = |mods: tussle_core::Modifiers| {
         use std::io::Write;
         let mut stderr = std::io::stderr().lock();
         // \x1B[2K clears the entire line; \r returns the cursor.
@@ -156,10 +251,18 @@ fn capture_interactively() -> Result<Option<KeyCombo>> {
             let _ = write!(stderr, "\r\x1B[2KHolding: {mods}+");
         }
         let _ = stderr.flush();
-    })
-    .context("capturing keystroke")?;
+    };
+    let (captured, probed) = if probe {
+        let p = capture::capture_and_probe(feedback, PROBE_SETTLE).context("probing keystroke")?;
+        (p.captured, Some(p))
+    } else {
+        (
+            capture::capture_one(feedback).context("capturing keystroke")?,
+            None,
+        )
+    };
 
-    Ok(match captured {
+    let combo = match captured {
         Captured::Combo(c) => {
             eprintln!("\r\x1B[2KCaptured: {c} — looking up...");
             Some(c)
@@ -180,5 +283,6 @@ fn capture_interactively() -> Result<Option<KeyCombo>> {
             }
             None
         }
-    })
+    };
+    Ok((combo, probed))
 }

@@ -103,6 +103,13 @@ enum Command {
         /// Emit JSON instead of a human-readable table.
         #[arg(long)]
         json: bool,
+
+        /// Interactive mode only: let the key through instead of
+        /// swallowing it, then watch which apps react. This is the only
+        /// way to see global hotkeys apps register in code, which no file
+        /// or menu reveals. Whatever the key does will happen.
+        #[arg(long)]
+        probe: bool,
     },
 }
 
@@ -128,9 +135,14 @@ pub fn run() -> Result<()> {
         Command::Conflicts { json } => {
             commands::conflicts::conflicts(json, cli.ax_timeout, cli.ax_concurrency, &cli.source)
         }
-        Command::Who { combo, json } => {
-            commands::who::who(combo, json, cli.ax_timeout, cli.ax_concurrency, &cli.source)
-        }
+        Command::Who { combo, json, probe } => commands::who::who(
+            combo,
+            json,
+            probe,
+            cli.ax_timeout,
+            cli.ax_concurrency,
+            &cli.source,
+        ),
     }
 }
 

@@ -4,8 +4,9 @@ mod event_tap;
 mod flags;
 mod keydown;
 mod permission;
+mod probe;
 
-use crate::capture::Captured;
+use crate::capture::{Captured, Probe};
 use crate::{Modifiers, ScanError};
 
 /// Wait for the next non-modifier KeyDown and return what was pressed.
@@ -17,7 +18,26 @@ where
     F: Fn(Modifiers) + Send + 'static,
 {
     permission::check_input_monitoring()?;
-    event_tap::capture_via_tap(on_modifiers_changed)
+    event_tap::capture_via_tap(on_modifiers_changed, false)
+}
+
+/// Capture the next keystroke without swallowing it, then watch who reacts.
+pub(super) fn probe<F>(
+    on_modifiers_changed: F,
+    settle: std::time::Duration,
+) -> Result<Probe, ScanError>
+where
+    F: Fn(Modifiers) + Send + 'static,
+{
+    permission::check_input_monitoring()?;
+    let baseline = probe::Snapshot::take();
+    let captured = event_tap::capture_via_tap(on_modifiers_changed, true)?;
+    let (reactions, input_source_change) = probe::watch(&baseline, settle);
+    Ok(Probe {
+        captured,
+        reactions,
+        input_source_change,
+    })
 }
 
 /// Construct a friendly `ScanError::Schema` for capture-time failures. The

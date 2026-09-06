@@ -25,7 +25,14 @@ use super::keydown::build_captured;
 ///
 /// `on_modifiers_changed` is called on every FlagsChanged event so callers
 /// can render live "Holding: cmd+shift…" feedback before the final key.
-pub(super) fn capture_via_tap<F>(on_modifiers_changed: F) -> Result<Captured, ScanError>
+///
+/// With `passthrough` the tap only listens and the keystroke reaches the
+/// system and apps as usual; otherwise it is swallowed so looking up ⌘Q
+/// does not quit anything.
+pub(super) fn capture_via_tap<F>(
+    on_modifiers_changed: F,
+    passthrough: bool,
+) -> Result<Captured, ScanError>
 where
     F: Fn(Modifiers) + Send + 'static,
 {
@@ -42,10 +49,15 @@ where
     let runloop_for_signal = runloop.clone();
     let _ = ctrlc::set_handler(move || runloop_for_signal.stop());
 
+    let options = if passthrough {
+        CGEventTapOptions::ListenOnly
+    } else {
+        CGEventTapOptions::Default
+    };
     let tap = CGEventTap::new(
         CGEventTapLocation::HID,
         CGEventTapPlacement::HeadInsertEventTap,
-        CGEventTapOptions::Default,
+        options,
         vec![CGEventType::KeyDown, CGEventType::FlagsChanged],
         move |_proxy, etype, event| {
             let modifiers = decode_cg_flags(event.get_flags().bits());

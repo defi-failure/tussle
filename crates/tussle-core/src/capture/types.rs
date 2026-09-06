@@ -3,6 +3,40 @@
 
 use crate::KeyCombo;
 
+/// What a probe saw happen right after the key went through.
+///
+/// Global hotkeys registered with `RegisterEventHotKey` leave no trace in
+/// any file or menu, so the only way to learn who answers a key is to let
+/// it through and watch. These are observations, not registrations: an
+/// app that opened a window may have reacted to the key or may have just
+/// been busy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reaction {
+    pub pid: i32,
+    pub app_name: Option<String>,
+    pub bundle_id: Option<String>,
+    pub kind: ReactionKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReactionKind {
+    /// The app became frontmost.
+    Activated,
+    /// The app put this many new windows on screen.
+    NewWindows(usize),
+}
+
+/// Result of [`super::capture_and_probe`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Probe {
+    pub captured: Captured,
+    /// Apps that visibly reacted, in the order they were noticed.
+    pub reactions: Vec<Reaction>,
+    /// `(before, after)` keyboard input source ids when the key changed
+    /// the input source.
+    pub input_source_change: Option<(String, String)>,
+}
+
 /// What [`super::capture_one`] produced.
 ///
 /// A KeyDown event is either a normal hotkey-shaped combination (modifiers

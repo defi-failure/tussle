@@ -10,7 +10,9 @@
 
 mod types;
 
-pub use types::{Captured, SystemAction, SystemActionKind, classify_extended_vk};
+pub use types::{
+    Captured, Probe, Reaction, ReactionKind, SystemAction, SystemActionKind, classify_extended_vk,
+};
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -37,6 +39,32 @@ where
     #[cfg(not(target_os = "macos"))]
     {
         let _ = on_modifiers_changed;
+        Err(ScanError::Schema {
+            path: std::path::PathBuf::new(),
+            message: "interactive capture is only supported on macOS".into(),
+        })
+    }
+}
+
+/// Wait for the next keystroke, let it through, and watch for `settle` who
+/// reacts: apps coming to the front, new windows, an input source change.
+///
+/// Unlike [`capture_one`] the key is not swallowed, so whatever it is
+/// bound to actually happens.
+pub fn capture_and_probe<F>(
+    on_modifiers_changed: F,
+    settle: std::time::Duration,
+) -> Result<Probe, ScanError>
+where
+    F: Fn(Modifiers) + Send + 'static,
+{
+    #[cfg(target_os = "macos")]
+    {
+        macos::probe(on_modifiers_changed, settle)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (on_modifiers_changed, settle);
         Err(ScanError::Schema {
             path: std::path::PathBuf::new(),
             message: "interactive capture is only supported on macOS".into(),
