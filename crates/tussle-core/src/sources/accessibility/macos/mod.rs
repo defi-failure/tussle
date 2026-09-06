@@ -43,8 +43,30 @@ pub(super) fn scan(
     // hundreds of running processes, not a performance lever for the
     // typical case.
     let mut apps = running_apps::list_running_apps();
+    let mut warnings = Vec::new();
     if !bundle_filter.is_empty() {
         let filter_lc: Vec<String> = bundle_filter.iter().map(|s| s.to_lowercase()).collect();
+        // Tell the user about a pattern that hit nothing before it turns
+        // into a silent "(no bindings found)".
+        for pattern in &filter_lc {
+            let hit = apps.iter().any(|a| {
+                matches_bundle_filter(
+                    a.bundle_id.as_deref(),
+                    a.app_name.as_deref(),
+                    std::slice::from_ref(pattern),
+                )
+            });
+            if !hit {
+                let names: Vec<&str> = apps
+                    .iter()
+                    .filter_map(|a| a.app_name.as_deref().or(a.bundle_id.as_deref()))
+                    .collect();
+                warnings.push(ScanWarning::NoMatchingApp {
+                    pattern: pattern.clone(),
+                    similar: similar_names(pattern, &names),
+                });
+            }
+        }
         let before = apps.len();
         apps.retain(|a| {
             matches_bundle_filter(a.bundle_id.as_deref(), a.app_name.as_deref(), &filter_lc)
@@ -74,7 +96,6 @@ pub(super) fn scan(
         .filter(|(_, r)| r.timed_out)
         .map(|(i, _)| i)
         .collect();
-    let mut warnings = Vec::new();
     if !slow.is_empty() {
         let retry_timeout = retry_timeout(messaging_timeout);
         tracing::info!(
@@ -159,6 +180,29 @@ fn resolve_retry(first: WalkResult, second: WalkResult) -> (WalkResult, bool) {
         first
     };
     (best, true)
+}
+
+/// Running apps whose name is a near miss for `pattern` (lowercase):
+/// sharing a four-character prefix in either direction catches the usual
+/// typos ("webstrom") and abbreviations without a fuzzy-matching crate.
+fn similar_names(pattern: &str, names: &[&str]) -> Vec<String> {
+    const PREFIX: usize = 4;
+    let stem: String = pattern.chars().take(PREFIX).collect();
+    if stem.chars().count() < 3 {
+        return Vec::new();
+    }
+    let mut out: Vec<String> = names
+        .iter()
+        .filter(|n| {
+            let lc = n.to_lowercase();
+            let name_stem: String = lc.chars().take(PREFIX).collect();
+            lc.contains(&stem) || (name_stem.chars().count() >= 3 && pattern.contains(&name_stem))
+        })
+        .map(|n| (*n).to_string())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
 }
 
 fn display_name(app: &RunningApp) -> String {
@@ -270,6 +314,15 @@ mod tests {
                 .collect(),
             timed_out,
         }
+    }
+
+    #[test]
+    fn near_misses_are_suggested_for_typos() {
+        let names = ["WebStorm", "Warp", "Finder", "RustRover"];
+        assert_eq!(similar_names("webstrom", &names), vec!["WebStorm"]);
+        assert_eq!(similar_names("rustrover", &names), vec!["RustRover"]);
+        assert!(similar_names("xcode", &names).is_empty());
+        assert!(similar_names("wa", &names).is_empty());
     }
 
     #[test]

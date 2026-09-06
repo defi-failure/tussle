@@ -31,6 +31,12 @@ pub enum ScanWarning {
     /// timeout, even on retry, so its menu shortcuts are missing or
     /// incomplete.
     Unresponsive { app: String },
+    /// An `--app` pattern matched no running app. Only running apps can
+    /// be scanned; `similar` lists running apps whose names come close.
+    NoMatchingApp {
+        pattern: String,
+        similar: Vec<String>,
+    },
 }
 
 impl std::fmt::Display for ScanWarning {
@@ -43,6 +49,16 @@ impl std::fmt::Display for ScanWarning {
                 f,
                 "{app} did not answer Accessibility queries in time; its menu shortcuts are missing"
             ),
+            ScanWarning::NoMatchingApp { pattern, similar } => {
+                write!(
+                    f,
+                    "no running app matches {pattern:?}; only running apps can be scanned"
+                )?;
+                if !similar.is_empty() {
+                    write!(f, " (similar: {})", similar.join(", "))?;
+                }
+                Ok(())
+            }
         }
     }
 }
