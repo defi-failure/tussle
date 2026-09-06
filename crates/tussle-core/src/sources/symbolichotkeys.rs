@@ -24,6 +24,11 @@ mod live;
 
 pub use live::{LiveHotkey, NO_KEY};
 
+/// Label of a live-table entry nothing could name. The index may replace
+/// it with what apps call the same combo, see
+/// [`HotkeyIndex`](crate::HotkeyIndex).
+pub const UNLABELLED_SYSTEM_SHORTCUT: &str = "macOS shortcut";
+
 /// Reads `com.apple.symbolichotkeys.plist` and merges its contents with
 /// macOS's hardcoded default table.
 #[derive(Debug, Clone)]
@@ -236,7 +241,7 @@ fn merge_live(rows: &[LiveHotkey], overrides: &HashMap<u32, Override>) -> Vec<Bi
             .map(str::to_owned)
             .or_else(|| builtin_for(&combo).map(|b| b.label.to_owned()))
             .or_else(|| id.map(|id| format!("Symbolic hotkey #{id}")))
-            .unwrap_or_else(|| "macOS shortcut".to_owned());
+            .unwrap_or_else(|| UNLABELLED_SYSTEM_SHORTCUT.to_owned());
         bindings.push(Binding {
             combo,
             source: BindingSource::SystemSymbolicHotkey {

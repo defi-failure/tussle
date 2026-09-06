@@ -2,9 +2,16 @@
 //! questions about it — who owns a combo, which binding actually fires,
 //! and where bindings get in each other's way.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::{Binding, KeyCombo, Layer, ScanError, ScanWarning, Scope, Source};
+use crate::sources::symbolichotkeys::UNLABELLED_SYSTEM_SHORTCUT;
+use crate::{
+    Binding, BindingSource, KeyCombo, Layer, ScanError, ScanWarning, Scope, Source, SystemDispatch,
+};
+
+/// How many apps must agree on a menu title before it names an unlabelled
+/// standard system menu item.
+const MIN_AGREEING_APPS: usize = 3;
 
 /// Every binding every source could see, plus what went wrong on the way.
 #[derive(Debug, Default)]
@@ -95,7 +102,50 @@ impl HotkeyIndex {
                 }
             }
         }
+        index.borrow_menu_labels();
         index
+    }
+
+    /// Name the standard menu items macOS registers without a label
+    /// (window tiling, Fill, Center, ...) after what apps call them.
+    ///
+    /// AppKit adds these items to every app's menus with a localized
+    /// title, so when at least [`MIN_AGREEING_APPS`] apps show the same
+    /// title on the same combo, that title is what the user sees.
+    fn borrow_menu_labels(&mut self) {
+        let mut titles: HashMap<KeyCombo, HashMap<String, HashSet<String>>> = HashMap::new();
+        for b in &self.bindings {
+            if let BindingSource::AppMenuItem { bundle_id, .. } = &b.source {
+                titles
+                    .entry(b.combo)
+                    .or_default()
+                    .entry(b.label.clone())
+                    .or_default()
+                    .insert(bundle_id.clone());
+            }
+        }
+        for b in &mut self.bindings {
+            let unnamed = matches!(
+                b.source,
+                BindingSource::SystemSymbolicHotkey {
+                    dispatch: SystemDispatch::StandardMenuItem,
+                    ..
+                }
+            ) && b.label == UNLABELLED_SYSTEM_SHORTCUT;
+            if !unnamed {
+                continue;
+            }
+            let best = titles.get(&b.combo).and_then(|by_title| {
+                by_title
+                    .iter()
+                    .max_by_key(|(title, apps)| (apps.len(), std::cmp::Reverse((*title).clone())))
+                    .filter(|(_, apps)| apps.len() >= MIN_AGREEING_APPS)
+                    .map(|(title, _)| title.clone())
+            });
+            if let Some(title) = best {
+                b.label = title;
+            }
+        }
     }
 
     pub fn push(&mut self, binding: Binding) {
@@ -509,5 +559,52 @@ mod tests {
         // A third party on the same combo still makes it a conflict.
         idx.push(menu("Editor", 'e', "Export"));
         assert_eq!(idx.conflicts().len(), 1);
+    }
+
+    #[test]
+    fn unnamed_standard_menu_items_take_the_title_apps_agree_on() {
+        let unnamed = || Binding {
+            combo: combo('c'),
+            source: BindingSource::SystemSymbolicHotkey {
+                id: None,
+                dispatch: SystemDispatch::StandardMenuItem,
+            },
+            label: UNLABELLED_SYSTEM_SHORTCUT.into(),
+            enabled: true,
+        };
+        let sources: Vec<Box<dyn Source>> = vec![Box::new(Fixed(
+            "mix",
+            vec![
+                unnamed(),
+                menu("A", 'c', "Center"),
+                menu("B", 'c', "Center"),
+                menu("C", 'c', "Center"),
+                menu("D", 'c', "Copy"),
+            ],
+            vec![],
+        ))];
+        let idx = HotkeyIndex::scan(sources.iter().map(|s| s.as_ref()));
+        let system = idx
+            .iter()
+            .find(|b| matches!(b.source, BindingSource::SystemSymbolicHotkey { .. }))
+            .unwrap();
+        assert_eq!(system.label, "Center");
+
+        // Two apps are not enough to trust a title.
+        let sources: Vec<Box<dyn Source>> = vec![Box::new(Fixed(
+            "few",
+            vec![
+                unnamed(),
+                menu("A", 'c', "Center"),
+                menu("B", 'c', "Center"),
+            ],
+            vec![],
+        ))];
+        let idx = HotkeyIndex::scan(sources.iter().map(|s| s.as_ref()));
+        let system = idx
+            .iter()
+            .find(|b| matches!(b.source, BindingSource::SystemSymbolicHotkey { .. }))
+            .unwrap();
+        assert_eq!(system.label, UNLABELLED_SYSTEM_SHORTCUT);
     }
 }
