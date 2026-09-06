@@ -92,6 +92,7 @@ pub fn parse(path: &Path) -> Result<Vec<Binding>, ScanError> {
                 menu_item: menu_item.clone(),
             },
             label: menu_item.clone(),
+            enabled: true,
         });
     }
 

@@ -50,15 +50,15 @@ fn parses_customized_fixture() {
     );
     assert_eq!(finder_search.label, "Show Finder search window");
 
-    // Disabled entries (e.g. ID 17, ID 22) must NOT appear in the output.
+    // These have neither a stored combo nor a known default, so they are
+    // not reported at all; if a future default table adds one, it must
+    // still come out disabled.
     for disabled_id in [17u32, 18, 19, 20, 21, 22, 23, 24, 25, 26] {
-        assert!(
-            !bindings.iter().any(|b| matches!(
-                &b.source,
-                BindingSource::SystemSymbolicHotkey { id } if *id == disabled_id
-            )),
-            "disabled binding id {disabled_id} should be filtered out",
-        );
+        for b in bindings.iter().filter(|b| {
+            matches!(&b.source, BindingSource::SystemSymbolicHotkey { id } if *id == disabled_id)
+        }) {
+            assert!(!b.enabled, "disabled binding id {disabled_id} must not be enabled");
+        }
     }
 
     // ID 32 (Mission Control) is not in this fixture's plist but should be
@@ -100,6 +100,42 @@ fn parses_customized_fixture() {
         KeyCombo {
             modifiers: Modifiers::CTRL,
             key: Key::Named(NamedKey::Left),
+        }
+    );
+}
+
+#[test]
+fn keeps_disabled_hotkeys_with_known_combos() {
+    let bindings = SymbolicHotkeys::new(fixture("disabled-with-known-combos.plist"))
+        .scan()
+        .expect("parse should succeed");
+
+    let by_id = |id: u32| {
+        bindings.iter().find(
+            |b| matches!(&b.source, BindingSource::SystemSymbolicHotkey { id: i } if *i == id),
+        )
+    };
+
+    // ID 64 is disabled with no stored combo: reported with the macOS
+    // default (⌘Space) and enabled = false.
+    let spotlight = by_id(64).expect("disabled Spotlight should still be reported");
+    assert!(!spotlight.enabled);
+    assert_eq!(
+        spotlight.combo,
+        KeyCombo {
+            modifiers: Modifiers::CMD,
+            key: Key::Named(NamedKey::Space),
+        }
+    );
+
+    // ID 65 is disabled but the plist still stores a custom ⌃⌥Space.
+    let finder = by_id(65).expect("disabled Finder search should still be reported");
+    assert!(!finder.enabled);
+    assert_eq!(
+        finder.combo,
+        KeyCombo {
+            modifiers: Modifiers::CTRL | Modifiers::OPT,
+            key: Key::Named(NamedKey::Space),
         }
     );
 }

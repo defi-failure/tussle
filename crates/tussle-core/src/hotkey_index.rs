@@ -50,6 +50,7 @@ mod tests {
             },
             source: BindingSource::SystemSymbolicHotkey { id: 0 },
             label: label.into(),
+            enabled: true,
         }
     }
 

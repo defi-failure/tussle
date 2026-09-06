@@ -65,8 +65,10 @@ const NS_FN: u64 = 1 << 23;
 /// What the user's plist says about a particular hotkey ID.
 #[derive(Debug, Clone, Copy)]
 enum Override {
-    /// User explicitly disabled this shortcut.
-    Disabled,
+    /// User explicitly disabled this shortcut. Carries the custom combo the
+    /// plist still stores for it, if any, so the entry can be reported as
+    /// present-but-off.
+    Disabled(Option<KeyCombo>),
     /// User has the shortcut enabled but has not customized the combo —
     /// macOS uses its built-in default.
     EnabledWithDefault,
@@ -75,7 +77,8 @@ enum Override {
 }
 
 /// Parse the plist and merge with macOS's default symbolic hotkey table to
-/// produce the final set of bindings. Disabled entries are filtered out.
+/// produce the final set of bindings. Disabled entries are kept with
+/// `enabled = false` whenever a combo is known for them.
 fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
     let overrides = parse_overrides(path)?;
     let defaults = macos_defaults();
@@ -86,12 +89,12 @@ fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
     // Pass 1: every ID we know a default for. Apply overrides on top.
     for (id, default_combo) in &defaults {
         handled.insert(*id);
-        let combo = match overrides.get(id) {
-            Some(Override::Disabled) => continue,
-            Some(Override::Custom(c)) => *c,
-            Some(Override::EnabledWithDefault) | None => *default_combo,
+        let (combo, enabled) = match overrides.get(id) {
+            Some(Override::Disabled(custom)) => (custom.unwrap_or(*default_combo), false),
+            Some(Override::Custom(c)) => (*c, true),
+            Some(Override::EnabledWithDefault) | None => (*default_combo, true),
         };
-        bindings.push(emit(*id, combo));
+        bindings.push(emit(*id, combo, enabled));
     }
 
     // Pass 2: IDs the user has customized for which we have no default. Surface
@@ -100,8 +103,10 @@ fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
         if handled.contains(id) {
             continue;
         }
-        if let Override::Custom(c) = entry {
-            bindings.push(emit(*id, *c));
+        match entry {
+            Override::Custom(c) => bindings.push(emit(*id, *c, true)),
+            Override::Disabled(Some(c)) => bindings.push(emit(*id, *c, false)),
+            Override::Disabled(None) | Override::EnabledWithDefault => {}
         }
     }
 
@@ -116,13 +121,14 @@ fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
     Ok(bindings)
 }
 
-fn emit(id: u32, combo: KeyCombo) -> Binding {
+fn emit(id: u32, combo: KeyCombo, enabled: bool) -> Binding {
     Binding {
         combo,
         source: BindingSource::SystemSymbolicHotkey { id },
         label: label_for(id)
             .map(str::to_owned)
             .unwrap_or_else(|| format!("Symbolic hotkey #{id}")),
+        enabled,
     }
 }
 
@@ -163,44 +169,40 @@ fn parse_overrides(path: &Path) -> Result<HashMap<u32, Override>, ScanError> {
             .get("enabled")
             .and_then(|v| v.as_boolean())
             .unwrap_or(true);
-        if !enabled {
-            map.insert(id, Override::Disabled);
-            continue;
-        }
-
-        let Some(value_dict) = entry_dict.get("value").and_then(|v| v.as_dictionary()) else {
-            map.insert(id, Override::EnabledWithDefault);
-            continue;
+        let custom = custom_combo(entry_dict);
+        let entry = match (enabled, custom) {
+            (false, custom) => Override::Disabled(custom),
+            (true, Some(combo)) => Override::Custom(combo),
+            (true, None) => Override::EnabledWithDefault,
         };
-
-        let Some(params) = value_dict.get("parameters").and_then(|v| v.as_array()) else {
-            continue;
-        };
-        if params.len() < 3 {
-            continue;
-        }
-
-        let char_code = params[PARAM_CHAR].as_signed_integer().unwrap_or(UNSET);
-        let vk = params[PARAM_VK].as_signed_integer().unwrap_or(UNSET);
-        let mask = params[PARAM_MASK].as_signed_integer().unwrap_or(0);
-
-        // (65535, 65535, *) is Apple's "no override" placeholder; treat as
-        // enabled-with-default rather than a real custom binding.
-        if char_code == UNSET && vk == UNSET {
-            map.insert(id, Override::EnabledWithDefault);
-            continue;
-        }
-
-        map.insert(
-            id,
-            Override::Custom(KeyCombo {
-                modifiers: decode_modifiers(mask as u64),
-                key: decode_key(char_code, vk),
-            }),
-        );
+        map.insert(id, entry);
     }
 
     Ok(map)
+}
+
+/// The combo stored under `value.parameters`, or `None` when the entry has
+/// no value, too few parameters, or Apple's `(65535, 65535, *)` "no
+/// override" placeholder.
+fn custom_combo(entry: &plist::Dictionary) -> Option<KeyCombo> {
+    let params = entry
+        .get("value")
+        .and_then(|v| v.as_dictionary())?
+        .get("parameters")
+        .and_then(|v| v.as_array())?;
+    if params.len() < 3 {
+        return None;
+    }
+    let char_code = params[PARAM_CHAR].as_signed_integer().unwrap_or(UNSET);
+    let vk = params[PARAM_VK].as_signed_integer().unwrap_or(UNSET);
+    let mask = params[PARAM_MASK].as_signed_integer().unwrap_or(0);
+    if char_code == UNSET && vk == UNSET {
+        return None;
+    }
+    Some(KeyCombo {
+        modifiers: decode_modifiers(mask as u64),
+        key: decode_key(char_code, vk),
+    })
 }
 
 /// macOS default bindings for symbolic hotkey IDs, hand-curated against

@@ -101,6 +101,7 @@ fn visit_item(
                 menu_path: new_path.clone(),
             },
             label: title.clone(),
+            enabled: true,
         });
     }
 

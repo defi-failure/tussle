@@ -38,7 +38,7 @@ pub fn who(
                     elapsed_ms = t_src.elapsed().as_millis() as u64,
                     "source scan complete",
                 );
-                matches.extend(found.into_iter().filter(|b| b.combo == combo));
+                matches.extend(found.into_iter().filter(|b| b.enabled && b.combo == combo));
             }
             Err(e) => tracing::warn!(source = src.name(), error = %e, "source failed"),
         }

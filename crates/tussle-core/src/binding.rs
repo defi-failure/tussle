@@ -10,6 +10,11 @@ pub struct Binding {
     /// Human-readable label (e.g. "Show Spotlight search" or
     /// "Open Brave (Raycast extension)").
     pub label: String,
+    /// Whether the binding currently fires. Sources that can see an entry
+    /// the user switched off (a disabled system shortcut, a disabled
+    /// launcher rule) report it with `enabled = false`, so a free combo can
+    /// still be explained without being counted as taken.
+    pub enabled: bool,
 }
 
 /// The system, app, or launcher that owns a binding.
@@ -48,7 +53,81 @@ pub enum BindingSource {
     },
 }
 
+/// Where in macOS's keyboard pipeline a binding intercepts the keystroke.
+///
+/// Ordered from first to last. When two enabled global bindings claim the
+/// same combo, the one on the earlier layer sees the event first and normally
+/// wins; the later one never fires. The order follows how macOS delivers
+/// key events: a virtual keyboard driver rewrites keys before the OS sees
+/// them, a session event tap runs before the window server dispatches
+/// system shortcuts, system shortcuts beat process-registered global
+/// hotkeys, and an app's menu items only see whatever is left while that
+/// app is frontmost.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Layer {
+    /// Virtual keyboard driver (Karabiner-Elements). Rewrites keys before
+    /// macOS sees them.
+    Driver,
+    /// Session-level `CGEventTap` (skhd, BetterTouchTool, Keyboard Maestro).
+    EventTap,
+    /// macOS system shortcuts from `com.apple.symbolichotkeys` (Spotlight,
+    /// Mission Control, screenshots, ...).
+    System,
+    /// Process-registered global hotkeys via `RegisterEventHotKey` (Raycast,
+    /// Alfred, Hammerspoon, ...).
+    GlobalHotkey,
+    /// A menu item of an application, including user overrides of one.
+    /// Fires only while that app is frontmost.
+    AppMenu,
+}
+
+/// When a binding can fire at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Scope {
+    /// Regardless of which app is frontmost.
+    Global,
+    /// Only while the owning app is frontmost.
+    App,
+}
+
+impl Layer {
+    /// Whether bindings on this layer fire globally or only in their app.
+    pub fn scope(self) -> Scope {
+        match self {
+            Layer::AppMenu => Scope::App,
+            _ => Scope::Global,
+        }
+    }
+
+    /// Stable lowercase identifier, for output and filters.
+    pub fn name(self) -> &'static str {
+        match self {
+            Layer::Driver => "driver",
+            Layer::EventTap => "event-tap",
+            Layer::System => "system",
+            Layer::GlobalHotkey => "global-hotkey",
+            Layer::AppMenu => "app-menu",
+        }
+    }
+}
+
 impl BindingSource {
+    /// The pipeline layer this binding lives on. Decides who wins when two
+    /// global bindings share a combo.
+    pub fn layer(&self) -> Layer {
+        match self {
+            BindingSource::SystemSymbolicHotkey { .. } => Layer::System,
+            BindingSource::AppMenuOverride { .. } | BindingSource::AppMenuItem { .. } => {
+                Layer::AppMenu
+            }
+        }
+    }
+
+    /// Shorthand for `self.layer().scope()`.
+    pub fn scope(&self) -> Scope {
+        self.layer().scope()
+    }
+
     /// Short human-readable identifier for whoever owns this binding —
     /// answers "who took this keystroke?" not "what does it do?".
     pub fn owner(&self) -> &str {
@@ -136,5 +215,46 @@ mod tests {
             menu_item: "New".into(),
         };
         assert_eq!(override_.bundle_id(), Some("com.apple.TextEdit"));
+    }
+
+    #[test]
+    fn layers_are_ordered_first_to_last() {
+        assert!(Layer::Driver < Layer::EventTap);
+        assert!(Layer::EventTap < Layer::System);
+        assert!(Layer::System < Layer::GlobalHotkey);
+        assert!(Layer::GlobalHotkey < Layer::AppMenu);
+    }
+
+    #[test]
+    fn only_app_menu_layer_is_app_scoped() {
+        assert_eq!(Layer::AppMenu.scope(), Scope::App);
+        for layer in [
+            Layer::Driver,
+            Layer::EventTap,
+            Layer::System,
+            Layer::GlobalHotkey,
+        ] {
+            assert_eq!(layer.scope(), Scope::Global, "{layer:?}");
+        }
+    }
+
+    #[test]
+    fn sources_map_to_layers() {
+        assert_eq!(
+            BindingSource::SystemSymbolicHotkey { id: 64 }.layer(),
+            Layer::System
+        );
+        let override_ = BindingSource::AppMenuOverride {
+            bundle_id: "com.apple.TextEdit".into(),
+            menu_item: "New".into(),
+        };
+        assert_eq!(override_.layer(), Layer::AppMenu);
+        assert_eq!(override_.scope(), Scope::App);
+        let item = BindingSource::AppMenuItem {
+            bundle_id: "com.apple.Safari".into(),
+            app_name: None,
+            menu_path: vec![],
+        };
+        assert_eq!(item.layer(), Layer::AppMenu);
     }
 }

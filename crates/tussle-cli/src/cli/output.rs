@@ -11,6 +11,7 @@ pub(super) struct BindingJson<'a> {
     combo: String,
     owner: &'a str,
     action: &'a str,
+    enabled: bool,
     source: SourceJson,
 }
 
@@ -37,6 +38,7 @@ impl<'a> From<&'a Binding> for BindingJson<'a> {
             combo: format!("{}", b.combo),
             owner: b.source.owner(),
             action: &b.label,
+            enabled: b.enabled,
             source: match &b.source {
                 BindingSource::SystemSymbolicHotkey { id } => {
                     SourceJson::SystemSymbolicHotkey { id: *id }
