@@ -116,11 +116,7 @@ mod tests {
             Some("Google Chrome"),
             &filter
         ));
-        assert!(matches_bundle_filter(
-            None,
-            Some("Google Chrome"),
-            &filter
-        ));
+        assert!(matches_bundle_filter(None, Some("Google Chrome"), &filter));
     }
 
     #[test]

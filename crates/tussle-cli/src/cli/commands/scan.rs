@@ -62,8 +62,7 @@ pub fn scan(
             let owner_lc = b.source.owner().to_lowercase();
             let bundle_lc = b.source.bundle_id().map(str::to_lowercase);
             filter_lc.iter().any(|f| {
-                owner_lc.contains(f)
-                    || bundle_lc.as_deref().is_some_and(|s| s.contains(f))
+                owner_lc.contains(f) || bundle_lc.as_deref().is_some_and(|s| s.contains(f))
             })
         });
     }
