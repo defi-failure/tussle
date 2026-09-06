@@ -24,6 +24,7 @@ pub fn who(
     as_json: bool,
     ax_timeout: f32,
     ax_concurrency: usize,
+    only: &[String],
 ) -> Result<()> {
     let combo = match combo_arg {
         Some(text) => KeyCombo::parse(&text).with_context(|| format!("parsing combo {text:?}"))?,
@@ -33,8 +34,8 @@ pub fn who(
         },
     };
 
-    let sources = default_sources(ax_timeout, ax_concurrency, Vec::new())?;
-    warn_if_no_accessibility();
+    let sources = default_sources(ax_timeout, ax_concurrency, Vec::new(), only)?;
+    warn_if_no_accessibility(&sources);
     let index = HotkeyIndex::scan(sources.iter().map(|s| s.as_ref()));
     report_warnings(&index);
 

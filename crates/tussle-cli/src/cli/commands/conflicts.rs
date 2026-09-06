@@ -20,9 +20,14 @@ struct ConflictJson<'a> {
     bindings: Vec<BindingJson<'a>>,
 }
 
-pub fn conflicts(as_json: bool, ax_timeout: f32, ax_concurrency: usize) -> Result<()> {
-    let sources = default_sources(ax_timeout, ax_concurrency, Vec::new())?;
-    warn_if_no_accessibility();
+pub fn conflicts(
+    as_json: bool,
+    ax_timeout: f32,
+    ax_concurrency: usize,
+    only: &[String],
+) -> Result<()> {
+    let sources = default_sources(ax_timeout, ax_concurrency, Vec::new(), only)?;
+    warn_if_no_accessibility(&sources);
     let index = HotkeyIndex::scan(sources.iter().map(|s| s.as_ref()));
     report_warnings(&index);
 

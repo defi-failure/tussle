@@ -13,6 +13,7 @@ pub fn scan(
     as_json: bool,
     ax_timeout: f32,
     ax_concurrency: usize,
+    only: &[String],
     key_filter: Vec<String>,
     app_filter: Vec<String>,
     group_by: GroupBy,
@@ -26,8 +27,8 @@ pub fn scan(
         .map(|s| ComboToken::parse(s).with_context(|| format!("parsing --key {s:?}")))
         .collect::<Result<Vec<_>>>()?;
 
-    let sources = default_sources(ax_timeout, ax_concurrency, app_filter.clone())?;
-    warn_if_no_accessibility();
+    let sources = default_sources(ax_timeout, ax_concurrency, app_filter.clone(), only)?;
+    warn_if_no_accessibility(&sources);
     let index = HotkeyIndex::scan(sources.iter().map(|s| s.as_ref()));
     report_warnings(&index);
 

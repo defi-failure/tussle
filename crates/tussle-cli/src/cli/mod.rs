@@ -39,6 +39,13 @@ struct Cli {
     #[arg(long, global = true, default_value_t = 512, value_name = "N")]
     ax_concurrency: usize,
 
+    /// Only scan these sources (`symbolichotkeys`, `nsuserkeyequivalents`,
+    /// `accessibility`). Repeat for several. Leaving out `accessibility`
+    /// skips the per-app menu walk, which is where nearly all the time
+    /// goes.
+    #[arg(long, global = true, value_name = "NAME", action = ArgAction::Append)]
+    source: Vec<String>,
+
     /// Increase log verbosity. `-v` INFO (high-level progress), `-vv` DEBUG
     /// (per-app timing, filter decisions), `-vvv` TRACE (per-AX-call detail
     /// — only useful when diagnosing a specific slow IPC). Overridden by
@@ -109,12 +116,20 @@ pub fn run() -> Result<()> {
             key,
             app,
             group_by,
-        } => commands::scan::scan(json, cli.ax_timeout, cli.ax_concurrency, key, app, group_by),
+        } => commands::scan::scan(
+            json,
+            cli.ax_timeout,
+            cli.ax_concurrency,
+            &cli.source,
+            key,
+            app,
+            group_by,
+        ),
         Command::Conflicts { json } => {
-            commands::conflicts::conflicts(json, cli.ax_timeout, cli.ax_concurrency)
+            commands::conflicts::conflicts(json, cli.ax_timeout, cli.ax_concurrency, &cli.source)
         }
         Command::Who { combo, json } => {
-            commands::who::who(combo, json, cli.ax_timeout, cli.ax_concurrency)
+            commands::who::who(combo, json, cli.ax_timeout, cli.ax_concurrency, &cli.source)
         }
     }
 }
