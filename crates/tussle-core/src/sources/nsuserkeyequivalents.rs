@@ -15,9 +15,9 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, ScanError};
+use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, ScanError, ScanWarning};
 
-use super::Source;
+use super::{Source, SourceScan};
 
 /// Walks every plist in a preferences directory looking for
 /// `NSUserKeyEquivalents` overrides — the per-app menu shortcut customizations
@@ -40,7 +40,7 @@ impl Source for AppMenuOverrides {
         "nsuserkeyequivalents"
     }
 
-    fn scan(&self) -> Result<Vec<Binding>, ScanError> {
+    fn scan(&self) -> Result<SourceScan, ScanError> {
         scan(&self.prefs_dir)
     }
 }
@@ -112,24 +112,30 @@ pub fn parse(path: &Path) -> Result<Vec<Binding>, ScanError> {
 /// Plists that fail to read or parse are skipped (most files in the
 /// preferences directory are unrelated app preferences). Only an error
 /// reading the directory itself is propagated.
-fn scan(prefs_dir: &Path) -> Result<Vec<Binding>, ScanError> {
+fn scan(prefs_dir: &Path) -> Result<SourceScan, ScanError> {
     let entries = std::fs::read_dir(prefs_dir).map_err(|source| ScanError::Io {
         path: prefs_dir.to_path_buf(),
         source,
     })?;
 
-    let mut bindings = Vec::new();
+    let mut out = SourceScan::default();
     for entry in entries.flatten() {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("plist") {
             continue;
         }
-        if let Ok(found) = parse(&path) {
-            bindings.extend(found);
+        match parse(&path) {
+            Ok(found) => out.bindings.extend(found),
+            // One unreadable or malformed preference file must not hide the
+            // overrides in every other one, but it must not vanish either.
+            Err(e) => out.warnings.push(ScanWarning::Skipped {
+                path,
+                message: e.to_string(),
+            }),
         }
     }
 
-    Ok(bindings)
+    Ok(out)
 }
 
 fn bundle_id_from_path(path: &Path) -> Option<String> {

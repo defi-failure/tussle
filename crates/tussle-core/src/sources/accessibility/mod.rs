@@ -11,9 +11,9 @@
 #[cfg(target_os = "macos")]
 mod macos;
 
-use crate::{Binding, ScanError};
+use crate::ScanError;
 
-use super::Source;
+use super::{Source, SourceScan};
 
 /// Source backed by the macOS Accessibility API.
 #[derive(Debug, Clone)]
@@ -69,7 +69,7 @@ impl Source for Accessibility {
         "accessibility"
     }
 
-    fn scan(&self) -> Result<Vec<Binding>, ScanError> {
+    fn scan(&self) -> Result<SourceScan, ScanError> {
         #[cfg(target_os = "macos")]
         {
             macos::scan(
@@ -77,10 +77,11 @@ impl Source for Accessibility {
                 self.max_concurrency,
                 &self.bundle_filter,
             )
+            .map(SourceScan::from)
         }
         #[cfg(not(target_os = "macos"))]
         {
-            Ok(Vec::new())
+            Ok(SourceScan::default())
         }
     }
 }

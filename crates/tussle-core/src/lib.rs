@@ -10,6 +10,6 @@ pub mod sources;
 
 pub use binding::{Binding, BindingSource, Layer, Scope};
 pub use combo::{ComboToken, Key, KeyCombo, Modifiers, NamedKey};
-pub use error::ScanError;
+pub use error::{ScanError, ScanWarning};
 pub use hotkey_index::HotkeyIndex;
-pub use sources::Source;
+pub use sources::{Source, SourceScan};

@@ -20,7 +20,8 @@ fn fixture(name: &str) -> PathBuf {
 fn parses_customized_fixture() {
     let bindings = SymbolicHotkeys::new(fixture("customized.plist"))
         .scan()
-        .expect("parse should succeed");
+        .expect("parse should succeed")
+        .bindings;
 
     // ID 64 (Show Spotlight search) is bound to ⌘Space.
     let spotlight = bindings
@@ -108,7 +109,8 @@ fn parses_customized_fixture() {
 fn keeps_disabled_hotkeys_with_known_combos() {
     let bindings = SymbolicHotkeys::new(fixture("disabled-with-known-combos.plist"))
         .scan()
-        .expect("parse should succeed");
+        .expect("parse should succeed")
+        .bindings;
 
     let by_id = |id: u32| {
         bindings.iter().find(

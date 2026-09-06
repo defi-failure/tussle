@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use crate::combo::vk_to_named;
 use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, NamedKey, ScanError};
 
-use super::Source;
+use super::{Source, SourceScan};
 
 /// Reads `com.apple.symbolichotkeys.plist` and merges its contents with
 /// macOS's hardcoded default table.
@@ -36,8 +36,8 @@ impl Source for SymbolicHotkeys {
         "symbolichotkeys"
     }
 
-    fn scan(&self) -> Result<Vec<Binding>, ScanError> {
-        scan(&self.plist_path)
+    fn scan(&self) -> Result<SourceScan, ScanError> {
+        scan(&self.plist_path).map(SourceScan::from)
     }
 }
 

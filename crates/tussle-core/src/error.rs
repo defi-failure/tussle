@@ -19,3 +19,22 @@ pub enum ScanError {
     #[error("unexpected schema in {path}: {message}")]
     Schema { path: PathBuf, message: String },
 }
+
+/// A non-fatal problem during a scan: the source still produced results,
+/// but they are known to be incomplete.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScanWarning {
+    /// A configuration file was skipped because it could not be read or
+    /// parsed. Everything else from the same source is still reported.
+    Skipped { path: PathBuf, message: String },
+}
+
+impl std::fmt::Display for ScanWarning {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScanWarning::Skipped { path, message } => {
+                write!(f, "skipped {}: {message}", path.display())
+            }
+        }
+    }
+}

@@ -5,7 +5,7 @@
 //! [`Source`] trait so callers can iterate over a heterogeneous set of
 //! sources without knowing each one's filesystem requirements.
 
-use crate::{Binding, ScanError};
+use crate::{Binding, ScanError, ScanWarning};
 
 pub mod accessibility;
 pub mod nsuserkeyequivalents;
@@ -21,6 +21,28 @@ pub trait Source {
     /// filtering on the CLI (`--source ...`) and tagging errors.
     fn name(&self) -> &'static str;
 
-    /// Walk this source and produce its current set of bindings.
-    fn scan(&self) -> Result<Vec<Binding>, ScanError>;
+    /// Walk this source and produce its current set of bindings, plus any
+    /// warnings about parts it could not read.
+    ///
+    /// `Err` means the source produced nothing usable (its main file is
+    /// missing or unreadable). Partial trouble goes into
+    /// [`SourceScan::warnings`] instead, so one bad file never hides the
+    /// rest of a source.
+    fn scan(&self) -> Result<SourceScan, ScanError>;
+}
+
+/// What one source found.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct SourceScan {
+    pub bindings: Vec<Binding>,
+    pub warnings: Vec<ScanWarning>,
+}
+
+impl From<Vec<Binding>> for SourceScan {
+    fn from(bindings: Vec<Binding>) -> Self {
+        Self {
+            bindings,
+            warnings: Vec::new(),
+        }
+    }
 }
