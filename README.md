@@ -1,5 +1,7 @@
 # tussle
 
+[![CI](https://github.com/defi-failure/tussle/actions/workflows/ci.yml/badge.svg)](https://github.com/defi-failure/tussle/actions/workflows/ci.yml)
+
 **Inspect every keyboard shortcut on your Mac.**
 
 Find which app uses a shortcut, list every binding registered on your
@@ -30,7 +32,7 @@ cd tussle
 cargo install --path crates/tussle-cli
 ```
 
-Requires macOS and Rust 1.85+ (edition 2024). Uninstall with
+Requires macOS and Rust 1.88+. Uninstall with
 `cargo uninstall tussle-cli`.
 
 ## Usage
