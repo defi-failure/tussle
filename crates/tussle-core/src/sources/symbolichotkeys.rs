@@ -114,7 +114,7 @@ fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
     }
 
     bindings.sort_by_key(|b| {
-        if let BindingSource::SystemSymbolicHotkey { id } = &b.source {
+        if let BindingSource::SystemSymbolicHotkey { id: Some(id) } = &b.source {
             *id
         } else {
             unreachable!("this parser only emits SystemSymbolicHotkey bindings")
@@ -127,7 +127,7 @@ fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
 fn emit(id: u32, combo: KeyCombo, enabled: bool) -> Binding {
     Binding {
         combo,
-        source: BindingSource::SystemSymbolicHotkey { id },
+        source: BindingSource::SystemSymbolicHotkey { id: Some(id) },
         label: label_for(id)
             .map(str::to_owned)
             .unwrap_or_else(|| format!("Symbolic hotkey #{id}")),

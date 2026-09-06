@@ -25,8 +25,10 @@ pub enum BindingSource {
     /// A macOS system shortcut sourced from
     /// `~/Library/Preferences/com.apple.symbolichotkeys.plist`.
     ///
-    /// `id` is the symbolic hotkey numeric identifier (e.g. 64 = Spotlight).
-    SystemSymbolicHotkey { id: u32 },
+    /// `id` is the symbolic hotkey numeric identifier (e.g. 64 = Spotlight)
+    /// when the entry is one the user can see in System Settings; `None`
+    /// for shortcuts macOS registers without exposing an id, such as ⌘Tab.
+    SystemSymbolicHotkey { id: Option<u32> },
 
     /// A per-app menu-item override stored in the app's
     /// `NSUserKeyEquivalents` dictionary at
@@ -187,7 +189,7 @@ mod tests {
 
     #[test]
     fn owner_for_symbolic_hotkey_is_macos() {
-        let s = BindingSource::SystemSymbolicHotkey { id: 64 };
+        let s = BindingSource::SystemSymbolicHotkey { id: Some(64) };
         assert_eq!(s.owner(), "macOS");
     }
 
@@ -222,7 +224,7 @@ mod tests {
 
     #[test]
     fn bundle_id_is_none_for_system_hotkey() {
-        let s = BindingSource::SystemSymbolicHotkey { id: 64 };
+        let s = BindingSource::SystemSymbolicHotkey { id: Some(64) };
         assert!(s.bundle_id().is_none());
     }
 
@@ -266,7 +268,7 @@ mod tests {
     #[test]
     fn sources_map_to_layers() {
         assert_eq!(
-            BindingSource::SystemSymbolicHotkey { id: 64 }.layer(),
+            BindingSource::SystemSymbolicHotkey { id: Some(64) }.layer(),
             Layer::System
         );
         let override_ = BindingSource::AppMenuOverride {

@@ -20,7 +20,7 @@ pub(super) struct BindingJson<'a> {
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SourceJson {
     SystemSymbolicHotkey {
-        id: u32,
+        id: Option<u32>,
     },
     AppMenuOverride {
         bundle_id: String,

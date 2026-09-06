@@ -241,7 +241,7 @@ mod tests {
     fn system(id: u32, c: char, label: &str) -> Binding {
         Binding {
             combo: combo(c),
-            source: BindingSource::SystemSymbolicHotkey { id },
+            source: BindingSource::SystemSymbolicHotkey { id: Some(id) },
             label: label.into(),
             enabled: true,
         }

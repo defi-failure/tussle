@@ -26,7 +26,12 @@ fn parses_customized_fixture() {
     // ID 64 (Show Spotlight search) is bound to ⌘Space.
     let spotlight = bindings
         .iter()
-        .find(|b| matches!(&b.source, BindingSource::SystemSymbolicHotkey { id: 64 }))
+        .find(|b| {
+            matches!(
+                &b.source,
+                BindingSource::SystemSymbolicHotkey { id: Some(64) }
+            )
+        })
         .expect("Spotlight binding should be parsed");
     assert_eq!(
         spotlight.combo,
@@ -40,7 +45,12 @@ fn parses_customized_fixture() {
     // ID 65 (Show Finder search window) is bound to ⌥⌘Space.
     let finder_search = bindings
         .iter()
-        .find(|b| matches!(&b.source, BindingSource::SystemSymbolicHotkey { id: 65 }))
+        .find(|b| {
+            matches!(
+                &b.source,
+                BindingSource::SystemSymbolicHotkey { id: Some(65) }
+            )
+        })
         .expect("Finder search binding should be parsed");
     assert_eq!(
         finder_search.combo,
@@ -56,7 +66,7 @@ fn parses_customized_fixture() {
     // still come out disabled.
     for disabled_id in [17u32, 18, 19, 20, 21, 22, 23, 24, 25, 26] {
         for b in bindings.iter().filter(|b| {
-            matches!(&b.source, BindingSource::SystemSymbolicHotkey { id } if *id == disabled_id)
+            matches!(&b.source, BindingSource::SystemSymbolicHotkey { id: Some(id) } if *id == disabled_id)
         }) {
             assert!(!b.enabled, "disabled binding id {disabled_id} must not be enabled");
         }
@@ -66,7 +76,12 @@ fn parses_customized_fixture() {
     // surfaced from the macOS defaults table at ⌃↑.
     let mission_control = bindings
         .iter()
-        .find(|b| matches!(&b.source, BindingSource::SystemSymbolicHotkey { id: 32 }))
+        .find(|b| {
+            matches!(
+                &b.source,
+                BindingSource::SystemSymbolicHotkey { id: Some(32) }
+            )
+        })
         .expect("Mission Control default should be merged in");
     assert_eq!(
         mission_control.combo,
@@ -80,7 +95,12 @@ fn parses_customized_fixture() {
     // appear via defaults at ⌃1.
     let desktop_1 = bindings
         .iter()
-        .find(|b| matches!(&b.source, BindingSource::SystemSymbolicHotkey { id: 118 }))
+        .find(|b| {
+            matches!(
+                &b.source,
+                BindingSource::SystemSymbolicHotkey { id: Some(118) }
+            )
+        })
         .expect("Switch to Desktop 1 default should be merged in");
     assert_eq!(
         desktop_1.combo,
@@ -100,7 +120,12 @@ fn parses_customized_fixture() {
     // should fall back to the macOS default ⌃←.
     let space_left = bindings
         .iter()
-        .find(|b| matches!(&b.source, BindingSource::SystemSymbolicHotkey { id: 79 }))
+        .find(|b| {
+            matches!(
+                &b.source,
+                BindingSource::SystemSymbolicHotkey { id: Some(79) }
+            )
+        })
         .expect("enabled-with-default ID 79 should pick up the macOS default");
     assert_eq!(
         space_left.combo,
@@ -120,7 +145,7 @@ fn keeps_disabled_hotkeys_with_known_combos() {
 
     let by_id = |id: u32| {
         bindings.iter().find(
-            |b| matches!(&b.source, BindingSource::SystemSymbolicHotkey { id: i } if *i == id),
+            |b| matches!(&b.source, BindingSource::SystemSymbolicHotkey { id: Some(i) } if *i == id),
         )
     };
 
