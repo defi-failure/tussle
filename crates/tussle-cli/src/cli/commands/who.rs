@@ -7,7 +7,7 @@ use serde::Serialize;
 use tabled::builder::Builder;
 use tabled::settings::Style;
 use tussle_core::capture::{self, Captured};
-use tussle_core::{HotkeyIndex, KeyCombo, Winner};
+use tussle_core::{Binding, HotkeyIndex, KeyCombo, Winner};
 
 use crate::cli::output::{BindingJson, VerdictJson, emit_json, layer_label, report_warnings};
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
@@ -41,9 +41,17 @@ pub fn who(
 
     let matches = index.find(&combo);
     let winner = index.winner(&combo);
+    // Switched-off claimants explain a free combo ("⌃1 would switch
+    // desktops, but that shortcut is off"), so list them after the live
+    // ones rather than hiding them.
+    let off: Vec<&Binding> = index
+        .iter()
+        .filter(|b| !b.enabled && b.combo == combo)
+        .collect();
     tracing::info!(
         combo = %combo,
         matches = matches.len(),
+        disabled = off.len(),
         "lookup complete",
     );
 
@@ -51,11 +59,15 @@ pub fn who(
         return emit_json(&WhoJson {
             combo: combo.to_string(),
             verdict: VerdictJson::from(winner),
-            bindings: matches.iter().map(|b| BindingJson::from(*b)).collect(),
+            bindings: matches
+                .iter()
+                .chain(off.iter())
+                .map(|b| BindingJson::from(*b))
+                .collect(),
         });
     }
 
-    if matches.is_empty() {
+    if matches.is_empty() && off.is_empty() {
         println!("nothing bound to {combo}");
         return Ok(());
     }
@@ -74,6 +86,14 @@ pub fn who(
             b.label.as_str(),
         ]);
     }
+    for b in &off {
+        builder.push_record([
+            "off",
+            layer_label(b.source.layer()),
+            b.source.owner(),
+            b.label.as_str(),
+        ]);
+    }
     println!();
     println!("{}", builder.build().with(Style::psql()));
     println!();
@@ -84,7 +104,7 @@ pub fn who(
 /// One sentence on who gets the key.
 fn describe(combo: &KeyCombo, winner: Winner<'_>, count: usize) -> String {
     match winner {
-        Winner::Nobody => format!("nothing bound to {combo}"),
+        Winner::Nobody => format!("nothing enabled is bound to {combo}"),
         Winner::Global(b) => {
             let losers = count - 1;
             let tail = match losers {

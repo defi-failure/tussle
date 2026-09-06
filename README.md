@@ -10,19 +10,20 @@ machine, and spot conflicts between apps.
 ```text
 $ tussle who ctrl+1
 
- Fires | Layer    | Owner  | Action
--------+----------+--------+------------------------------
- yes   | system   | macOS  | Switch to Desktop 1
-       | app-menu | PixPin | 截图
-       | app-menu | Warp   | Left Panel: Project Explorer
+ Fires | Layer         | Owner  | Action
+-------+---------------+--------+------------------------------
+ yes   | global-hotkey | PixPin | 截图
+       | app-menu      | Warp   | Left Panel: Project Explorer
+ off   | system        | macOS  | Switch to Desktop 1
 
-ctrl+1 fires macOS (system layer): Switch to Desktop 1; the other 2 bindings never see this key
+ctrl+1 fires PixPin (global-hotkey layer): 截图; the other binding never sees this key
 ```
 
-Three things claim ⌃1 here. macOS handles it at the system layer before
-any app sees the key, so the two app bindings are dead until that system
-shortcut is changed or disabled. tussle orders every claimant by where it
-sits in the keyboard pipeline and says which one actually fires.
+Three things claim ⌃1 here. tussle orders them by where they sit in the
+keyboard pipeline: PixPin registered a global hotkey, so it takes the key
+before Warp's menu item can see it, and macOS's own "Switch to Desktop 1"
+exists but ships switched off. Change or disable the winner and the next
+one down starts working.
 
 ## Install
 
@@ -91,8 +92,9 @@ their own menus is not a conflict and is not listed.
 
 ```text
  Combo      | Kind     | Fires                                   | Blocked
-------------+----------+-----------------------------------------+---------------------------------
+------------+----------+-----------------------------------------+---------------------------------------
  cmd+space  | shadowed | macOS: Show Spotlight search            | Lark Helper: 表情
+ ctrl+1     | shadowed | PixPin: 截图                            | Warp: Left Panel: Project Explorer
  ctrl+space | shadowed | macOS: Select the previous input source | Warp: New Agent Pane, WebStorm: Basic
 ```
 
@@ -114,8 +116,8 @@ combine as AND. `--source` (repeatable) restricts which sources run:
 `symbolichotkeys`, `nsuserkeyequivalents`, `accessibility`.
 
 Every command accepts `--json`. Rows carry the `layer` a binding sits on
-(`system`, `app-menu`, and more as sources are added) and whether it is
-`enabled`.
+(`system`, `global-hotkey`, `app-menu`, and more as sources are added)
+and whether it is `enabled`.
 
 ## Permissions
 
@@ -134,10 +136,10 @@ Early. macOS only.
 
 - Third-party launcher parsers: Karabiner, Raycast, BetterTouchTool,
   Hammerspoon, Keyboard Maestro.
-- Global hotkey detection. A menubar app's shortcut read from its
-  status-bar menu is reported on the `app-menu` layer even when the app
-  registered it as a global hotkey; telling the two apart needs a
-  different source.
+- Global hotkey detection. A status-bar menu shortcut that looks like a
+  global hotkey (⌃-based, fn-based, ⌘-less, or a function key) is
+  reported on the `global-hotkey` layer; ordinary ⌘-plus-key items stay
+  `app-menu`. Confirming an actual registration needs a different source.
 - Homebrew tap.
 - Persistent cache for instant repeat lookups.
 - `tussle diff` — what changed since the last scan.

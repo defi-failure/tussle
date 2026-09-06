@@ -51,6 +51,24 @@ pub enum BindingSource {
         /// (e.g. `["File", "New Window"]`).
         menu_path: Vec<String>,
     },
+    /// A key equivalent shown in an app's status-bar (`NSStatusItem`)
+    /// menu that looks like a global hotkey, discovered via the
+    /// Accessibility API.
+    ///
+    /// A menu's key equivalents only fire while that menu is open, so a
+    /// ⌃1 displayed there is useful to the user only because the app also
+    /// registered it globally; menubar apps do exactly that. The
+    /// registration itself is invisible to the Accessibility API, so this
+    /// is a judgement by shape: status-bar shortcuts of the ordinary
+    /// ⌘-plus-key kind (⌘C, ⌘Q, ⌘,) stay [`AppMenuItem`](Self::AppMenuItem).
+    StatusMenuItem {
+        /// The app's bundle identifier.
+        bundle_id: String,
+        /// Localized app name as macOS reports it, when available.
+        app_name: Option<String>,
+        /// Menu hierarchy path to the item, top-level first.
+        menu_path: Vec<String>,
+    },
 }
 
 /// Where in macOS's keyboard pipeline a binding intercepts the keystroke.
@@ -117,6 +135,7 @@ impl BindingSource {
     pub fn layer(&self) -> Layer {
         match self {
             BindingSource::SystemSymbolicHotkey { .. } => Layer::System,
+            BindingSource::StatusMenuItem { .. } => Layer::GlobalHotkey,
             BindingSource::AppMenuOverride { .. } | BindingSource::AppMenuItem { .. } => {
                 Layer::AppMenu
             }
@@ -138,6 +157,11 @@ impl BindingSource {
                 app_name,
                 bundle_id,
                 ..
+            }
+            | BindingSource::StatusMenuItem {
+                app_name,
+                bundle_id,
+                ..
             } => app_name.as_deref().unwrap_or(bundle_id),
         }
     }
@@ -151,7 +175,8 @@ impl BindingSource {
         match self {
             BindingSource::SystemSymbolicHotkey { .. } => None,
             BindingSource::AppMenuOverride { bundle_id, .. } => Some(bundle_id),
-            BindingSource::AppMenuItem { bundle_id, .. } => Some(bundle_id),
+            BindingSource::AppMenuItem { bundle_id, .. }
+            | BindingSource::StatusMenuItem { bundle_id, .. } => Some(bundle_id),
         }
     }
 }
@@ -256,5 +281,14 @@ mod tests {
             menu_path: vec![],
         };
         assert_eq!(item.layer(), Layer::AppMenu);
+        let status = BindingSource::StatusMenuItem {
+            bundle_id: "com.pixpin.PixPin".into(),
+            app_name: Some("PixPin".into()),
+            menu_path: vec!["截图".into()],
+        };
+        assert_eq!(status.layer(), Layer::GlobalHotkey);
+        assert_eq!(status.scope(), Scope::Global);
+        assert_eq!(status.owner(), "PixPin");
+        assert_eq!(status.bundle_id(), Some("com.pixpin.PixPin"));
     }
 }

@@ -9,7 +9,7 @@ use accessibility_sys::{
     kAXTitleAttribute,
 };
 
-use crate::{Binding, BindingSource, Key, KeyCombo};
+use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, NamedKey};
 
 use super::ax::{AxFailure, copy_attribute, copy_children, copy_i64, copy_string};
 use super::modifiers::decode_ax_modifiers;
@@ -52,6 +52,7 @@ pub(super) fn walk_app_menus(app: &RunningApp, messaging_timeout: f32) -> WalkRe
     let mut walk = Walk {
         app,
         timeout: messaging_timeout,
+        status_bar: false,
         result: WalkResult::default(),
     };
 
@@ -67,8 +68,10 @@ pub(super) fn walk_app_menus(app: &RunningApp, messaging_timeout: f32) -> WalkRe
     }
 
     // Status-bar (NSStatusItem) dropdowns. Menubar-only apps like PixPin
-    // expose their main shortcuts here, not on the regular menu bar.
+    // expose their main shortcuts here, not on the regular menu bar, and
+    // those shortcuts are global hotkeys in practice.
     if !walk.result.timed_out {
+        walk.status_bar = true;
         match copy_attribute(element, "AXExtrasMenuBar") {
             Ok(extras) => {
                 walk.menu(extras, &[], 0);
@@ -98,6 +101,9 @@ pub(super) fn walk_app_menus(app: &RunningApp, messaging_timeout: f32) -> WalkRe
 struct Walk<'a> {
     app: &'a RunningApp,
     timeout: f32,
+    /// Whether the elements being visited hang off the status bar
+    /// (`AXExtrasMenuBar`) rather than the main menu bar.
+    status_bar: bool,
     result: WalkResult,
 }
 
@@ -155,16 +161,30 @@ impl Walk<'_> {
         }
 
         match read_key_equivalent(item) {
-            Ok(Some(combo)) => self.result.bindings.push(Binding {
-                combo,
-                source: BindingSource::AppMenuItem {
-                    bundle_id: self.app.bundle_id.clone().unwrap_or_default(),
-                    app_name: self.app.app_name.clone(),
-                    menu_path: new_path.clone(),
-                },
-                label: title.clone(),
-                enabled: true,
-            }),
+            Ok(Some(combo)) => {
+                let bundle_id = self.app.bundle_id.clone().unwrap_or_default();
+                let app_name = self.app.app_name.clone();
+                let menu_path = new_path.clone();
+                let source = if self.status_bar && looks_like_global_hotkey(&combo) {
+                    BindingSource::StatusMenuItem {
+                        bundle_id,
+                        app_name,
+                        menu_path,
+                    }
+                } else {
+                    BindingSource::AppMenuItem {
+                        bundle_id,
+                        app_name,
+                        menu_path,
+                    }
+                };
+                self.result.bindings.push(Binding {
+                    combo,
+                    source,
+                    label: title.clone(),
+                    enabled: true,
+                });
+            }
             Ok(None) => {}
             Err(failure) => {
                 if self.stalled(failure) {
@@ -190,6 +210,50 @@ impl Walk<'_> {
             }
         }
     }
+}
+
+/// Whether a shortcut shown in a status-bar menu is plausibly a global
+/// hotkey rather than an ordinary menu item.
+///
+/// Status-bar menus mix both: PixPin lists its global ⌃1 there, Surge
+/// lists a perfectly ordinary ⌘C. Nothing in the Accessibility API tells
+/// them apart, so this goes by convention: global hotkeys avoid the
+/// plain ⌘-plus-key shapes that every app already uses in its menus and
+/// reach for ⌃, fn, ⌘-less combos or function keys instead. Erring
+/// towards "ordinary" is deliberate; a missed global hotkey affects one
+/// verdict, a false one floods `conflicts` with nonsense.
+fn looks_like_global_hotkey(combo: &KeyCombo) -> bool {
+    let m = combo.modifiers;
+    !m.contains(Modifiers::CMD)
+        || m.contains(Modifiers::CTRL)
+        || m.contains(Modifiers::FN)
+        || matches!(combo.key, Key::Named(k) if is_function_key(k))
+}
+
+fn is_function_key(key: NamedKey) -> bool {
+    use NamedKey::*;
+    matches!(
+        key,
+        F1 | F2
+            | F3
+            | F4
+            | F5
+            | F6
+            | F7
+            | F8
+            | F9
+            | F10
+            | F11
+            | F12
+            | F13
+            | F14
+            | F15
+            | F16
+            | F17
+            | F18
+            | F19
+            | F20
+    )
 }
 
 /// Whether a `CannotComplete` that took `elapsed` was the messaging
@@ -235,6 +299,52 @@ mod tests {
         assert!(is_timeout(Duration::from_millis(1200), 1.0));
         assert!(!is_timeout(Duration::from_millis(5), 1.0));
         assert!(!is_timeout(Duration::from_millis(700), 1.0));
+    }
+
+    #[test]
+    fn ordinary_command_shortcuts_are_not_global_hotkeys() {
+        let combo = |m, k| KeyCombo {
+            modifiers: m,
+            key: k,
+        };
+        // Surge / OrbStack style status menus: plain menu items.
+        assert!(!looks_like_global_hotkey(&combo(
+            Modifiers::CMD,
+            Key::Char('c')
+        )));
+        assert!(!looks_like_global_hotkey(&combo(
+            Modifiers::CMD,
+            Key::Char(',')
+        )));
+        assert!(!looks_like_global_hotkey(&combo(
+            Modifiers::CMD | Modifiers::OPT,
+            Key::Char('c')
+        )));
+        assert!(!looks_like_global_hotkey(&combo(
+            Modifiers::CMD | Modifiers::SHIFT,
+            Key::Char('4')
+        )));
+        // PixPin style: control-based, fn-based, ⌘-less, or function keys.
+        assert!(looks_like_global_hotkey(&combo(
+            Modifiers::CTRL,
+            Key::Char('1')
+        )));
+        assert!(looks_like_global_hotkey(&combo(
+            Modifiers::CTRL | Modifiers::CMD,
+            Key::Named(NamedKey::Space)
+        )));
+        assert!(looks_like_global_hotkey(&combo(
+            Modifiers::FN,
+            Key::Char('a')
+        )));
+        assert!(looks_like_global_hotkey(&combo(
+            Modifiers::OPT,
+            Key::Named(NamedKey::Space)
+        )));
+        assert!(looks_like_global_hotkey(&combo(
+            Modifiers::CMD,
+            Key::Named(NamedKey::F5)
+        )));
     }
 
     #[test]

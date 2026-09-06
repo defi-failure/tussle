@@ -260,6 +260,19 @@ mod tests {
         }
     }
 
+    fn status(app: &str, c: char, label: &str) -> Binding {
+        Binding {
+            combo: combo(c),
+            source: BindingSource::StatusMenuItem {
+                bundle_id: format!("com.example.{app}"),
+                app_name: Some(app.into()),
+                menu_path: vec![label.into()],
+            },
+            label: label.into(),
+            enabled: true,
+        }
+    }
+
     struct Fixed(&'static str, Vec<Binding>, Vec<ScanWarning>);
     impl Source for Fixed {
         fn name(&self) -> &'static str {
@@ -431,5 +444,35 @@ mod tests {
             .map(|c| c.combo.to_string())
             .collect();
         assert_eq!(combos, vec!["cmd+a", "cmd+z"]);
+    }
+
+    #[test]
+    fn status_bar_shortcut_beats_app_menus_but_not_the_system() {
+        let mut idx = HotkeyIndex::new();
+        idx.push(menu("Warp", '1', "Left Panel"));
+        idx.push(status("PixPin", '1', "截图"));
+        assert!(
+            matches!(idx.winner(&combo('1')), Winner::Global(b) if b.source.owner() == "PixPin")
+        );
+        let conflicts = idx.conflicts();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].kind, ConflictKind::Shadowed);
+
+        idx.push(system(118, '1', "Switch to Desktop 1"));
+        assert!(
+            matches!(idx.winner(&combo('1')), Winner::Global(b) if b.source.owner() == "macOS")
+        );
+        assert_eq!(idx.conflicts()[0].kind, ConflictKind::Contested);
+    }
+
+    #[test]
+    fn two_status_bar_apps_on_one_combo_are_contested() {
+        let mut idx = HotkeyIndex::new();
+        idx.push(status("PixPin", 'x', "截图"));
+        idx.push(status("CleanShot", 'x', "Capture"));
+        assert_eq!(
+            idx.winner(&combo('x')),
+            Winner::Contested(Layer::GlobalHotkey)
+        );
     }
 }
