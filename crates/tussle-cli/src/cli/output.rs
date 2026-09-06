@@ -37,6 +37,9 @@ enum SourceJson {
         app_name: Option<String>,
         menu_path: Vec<String>,
     },
+    AppleMenuItem {
+        menu_path: Vec<String>,
+    },
 }
 
 impl<'a> From<&'a Binding> for BindingJson<'a> {
@@ -80,6 +83,9 @@ impl<'a> From<&'a Binding> for BindingJson<'a> {
                 } => SourceJson::StatusMenuItem {
                     bundle_id: bundle_id.clone(),
                     app_name: app_name.clone(),
+                    menu_path: menu_path.clone(),
+                },
+                BindingSource::AppleMenuItem { menu_path } => SourceJson::AppleMenuItem {
                     menu_path: menu_path.clone(),
                 },
             },

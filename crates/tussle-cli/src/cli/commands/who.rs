@@ -7,7 +7,7 @@ use serde::Serialize;
 use tabled::builder::Builder;
 use tabled::settings::Style;
 use tussle_core::capture::{self, Captured};
-use tussle_core::{Binding, HotkeyIndex, KeyCombo, Winner};
+use tussle_core::{Binding, BindingSource, HotkeyIndex, KeyCombo, Winner};
 
 use crate::cli::output::{BindingJson, VerdictJson, emit_json, layer_label, report_warnings};
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
@@ -97,13 +97,22 @@ pub fn who(
     println!();
     println!("{}", builder.build().with(Style::psql()));
     println!();
-    println!("{}", describe(&combo, winner, matches.len()));
+    println!("{}", describe(&combo, winner, &matches));
     Ok(())
 }
 
 /// One sentence on who gets the key.
-fn describe(combo: &KeyCombo, winner: Winner<'_>, count: usize) -> String {
+fn describe(combo: &KeyCombo, winner: Winner<'_>, matches: &[&Binding]) -> String {
+    let count = matches.len();
+    let all_apple_menu = !matches.is_empty()
+        && matches
+            .iter()
+            .all(|b| matches!(b.source, BindingSource::AppleMenuItem { .. }));
     match winner {
+        Winner::FrontmostApp if all_apple_menu => format!(
+            "{combo} is an Apple menu item ({}), available in every app",
+            matches[0].label
+        ),
         Winner::Nobody => format!("nothing enabled is bound to {combo}"),
         Winner::Global(b) => {
             let losers = count - 1;

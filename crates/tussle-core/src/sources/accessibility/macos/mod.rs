@@ -5,10 +5,11 @@ mod menu_walker;
 mod modifiers;
 mod running_apps;
 
+use std::collections::HashSet;
 use std::thread;
 
 use crate::sources::SourceScan;
-use crate::{ScanError, ScanWarning};
+use crate::{Binding, BindingSource, KeyCombo, ScanError, ScanWarning};
 
 use menu_walker::WalkResult;
 use running_apps::RunningApp;
@@ -96,9 +97,23 @@ pub(super) fn scan(
     }
 
     Ok(SourceScan {
-        bindings: results.into_iter().flat_map(|r| r.bindings).collect(),
+        bindings: dedupe_apple_menu(results.into_iter().flat_map(|r| r.bindings)),
         warnings,
     })
+}
+
+/// Every app shows the same Apple menu, so its items come back once per
+/// running app. Keep the first of each (combo, label) and pass everything
+/// else through untouched.
+fn dedupe_apple_menu(bindings: impl IntoIterator<Item = Binding>) -> Vec<Binding> {
+    let mut seen: HashSet<(KeyCombo, String)> = HashSet::new();
+    bindings
+        .into_iter()
+        .filter(|b| {
+            !matches!(b.source, BindingSource::AppleMenuItem { .. })
+                || seen.insert((b.combo, b.label.clone()))
+        })
+        .collect()
 }
 
 /// Walk every app, `chunk_size` at a time, one thread per app. Results
@@ -255,6 +270,31 @@ mod tests {
                 .collect(),
             timed_out,
         }
+    }
+
+    #[test]
+    fn apple_menu_items_are_reported_once() {
+        use crate::{Key, Modifiers};
+        let lock = |label: &str| Binding {
+            combo: KeyCombo {
+                modifiers: Modifiers::CTRL | Modifiers::CMD,
+                key: Key::Char('q'),
+            },
+            source: BindingSource::AppleMenuItem {
+                menu_path: vec!["Apple".into(), label.into()],
+            },
+            label: label.into(),
+            enabled: true,
+        };
+        let mut app_item = walk(1, false).bindings.remove(0);
+        app_item.label = "Quit".into();
+        let out = dedupe_apple_menu(vec![
+            lock("锁定屏幕"),
+            app_item,
+            lock("锁定屏幕"),
+            lock("退出登录"),
+        ]);
+        assert_eq!(out.len(), 3);
     }
 
     #[test]

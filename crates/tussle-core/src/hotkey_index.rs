@@ -154,14 +154,28 @@ impl HotkeyIndex {
     /// Several apps reusing one shortcut in their own menus is not a
     /// conflict: each only fires in its own app. A global binding on that
     /// same combo is, because it takes the key before any app sees it.
+    /// Bindings owned by whoever wins do not count as losers either: the
+    /// Apple menu's Force Quit item losing to the system's own ⌥⌘Esc is
+    /// the same function twice, not a conflict.
     pub fn conflicts(&self) -> Vec<Conflict<'_>> {
         let mut out = Vec::new();
         for (combo, group) in self.by_combo() {
+            let winner_owner = match winner_of(&group) {
+                Winner::Global(b) => Some(b.source.owner()),
+                _ => None,
+            };
+            let others = |scope| {
+                group
+                    .iter()
+                    .filter(|b| b.source.scope() == scope)
+                    .filter(|b| winner_owner != Some(b.source.owner()))
+                    .count()
+            };
             let globals = group
                 .iter()
                 .filter(|b| b.source.scope() == Scope::Global)
                 .count();
-            let kind = match (globals, group.len() - globals) {
+            let kind = match (globals, others(Scope::App)) {
                 (2.., _) => ConflictKind::Contested,
                 (1, 1..) => ConflictKind::Shadowed,
                 _ => continue,
@@ -477,5 +491,23 @@ mod tests {
             idx.winner(&combo('x')),
             Winner::Contested(Layer::GlobalHotkey)
         );
+    }
+
+    #[test]
+    fn the_winner_shadowing_its_own_items_is_not_a_conflict() {
+        let mut idx = HotkeyIndex::new();
+        idx.push(system(0, 'e', "Force Quit"));
+        idx.push(Binding {
+            combo: combo('e'),
+            source: BindingSource::AppleMenuItem {
+                menu_path: vec!["Apple".into(), "Force Quit…".into()],
+            },
+            label: "Force Quit…".into(),
+            enabled: true,
+        });
+        assert!(idx.conflicts().is_empty());
+        // A third party on the same combo still makes it a conflict.
+        idx.push(menu("Editor", 'e', "Export"));
+        assert_eq!(idx.conflicts().len(), 1);
     }
 }

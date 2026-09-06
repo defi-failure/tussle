@@ -18,6 +18,9 @@ use super::running_apps::RunningApp;
 /// Hard cap on menu recursion depth to defend against pathological apps.
 const MAX_MENU_DEPTH: usize = 16;
 
+/// AX title of the Apple menu, the same in every locale.
+const APPLE_MENU_TITLE: &str = "Apple";
+
 /// A `CannotComplete` that took at least this share of the configured
 /// timeout is a timeout; a faster one means the process has no
 /// Accessibility server and is not worth retrying.
@@ -165,7 +168,9 @@ impl Walk<'_> {
                 let bundle_id = self.app.bundle_id.clone().unwrap_or_default();
                 let app_name = self.app.app_name.clone();
                 let menu_path = new_path.clone();
-                let source = if self.status_bar && looks_like_global_hotkey(&combo) {
+                let source = if menu_path.first().is_some_and(|top| top == APPLE_MENU_TITLE) {
+                    BindingSource::AppleMenuItem { menu_path }
+                } else if self.status_bar && looks_like_global_hotkey(&combo) {
                     BindingSource::StatusMenuItem {
                         bundle_id,
                         app_name,

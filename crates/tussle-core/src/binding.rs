@@ -76,6 +76,13 @@ pub enum BindingSource {
         /// Menu hierarchy path to the item, top-level first.
         menu_path: Vec<String>,
     },
+    /// An item of the Apple menu, which macOS puts in front of every app's
+    /// own menus. Reported once, owned by macOS, rather than once per
+    /// running app.
+    AppleMenuItem {
+        /// Menu hierarchy path to the item, starting with `"Apple"`.
+        menu_path: Vec<String>,
+    },
 }
 
 /// How macOS delivers one of its own shortcuts.
@@ -168,9 +175,9 @@ impl BindingSource {
                 ..
             } => Layer::AppMenu,
             BindingSource::StatusMenuItem { .. } => Layer::GlobalHotkey,
-            BindingSource::AppMenuOverride { .. } | BindingSource::AppMenuItem { .. } => {
-                Layer::AppMenu
-            }
+            BindingSource::AppMenuOverride { .. }
+            | BindingSource::AppMenuItem { .. }
+            | BindingSource::AppleMenuItem { .. } => Layer::AppMenu,
         }
     }
 
@@ -183,7 +190,9 @@ impl BindingSource {
     /// answers "who took this keystroke?" not "what does it do?".
     pub fn owner(&self) -> &str {
         match self {
-            BindingSource::SystemSymbolicHotkey { .. } => "macOS",
+            BindingSource::SystemSymbolicHotkey { .. } | BindingSource::AppleMenuItem { .. } => {
+                "macOS"
+            }
             BindingSource::AppMenuOverride { bundle_id, .. } => bundle_id,
             BindingSource::AppMenuItem {
                 app_name,
@@ -205,7 +214,9 @@ impl BindingSource {
     /// English).
     pub fn bundle_id(&self) -> Option<&str> {
         match self {
-            BindingSource::SystemSymbolicHotkey { .. } => None,
+            BindingSource::SystemSymbolicHotkey { .. } | BindingSource::AppleMenuItem { .. } => {
+                None
+            }
             BindingSource::AppMenuOverride { bundle_id, .. } => Some(bundle_id),
             BindingSource::AppMenuItem { bundle_id, .. }
             | BindingSource::StatusMenuItem { bundle_id, .. } => Some(bundle_id),
@@ -299,6 +310,16 @@ mod tests {
         ] {
             assert_eq!(layer.scope(), Scope::Global, "{layer:?}");
         }
+    }
+
+    #[test]
+    fn apple_menu_items_belong_to_macos_on_the_app_menu_layer() {
+        let lock = BindingSource::AppleMenuItem {
+            menu_path: vec!["Apple".into(), "Lock Screen".into()],
+        };
+        assert_eq!(lock.owner(), "macOS");
+        assert_eq!(lock.bundle_id(), None);
+        assert_eq!(lock.layer(), Layer::AppMenu);
     }
 
     #[test]
