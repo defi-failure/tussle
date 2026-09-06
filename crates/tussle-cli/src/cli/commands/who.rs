@@ -9,7 +9,9 @@ use tabled::settings::Style;
 use tussle_core::capture::{self, Captured, Probe, Reaction, ReactionKind};
 use tussle_core::{Binding, BindingSource, HotkeyIndex, KeyCombo, Winner};
 
-use crate::cli::output::{BindingJson, VerdictJson, emit_json, layer_label, report_warnings};
+use crate::cli::output::{
+    BindingJson, VerdictJson, emit_json, how_to_change, layer_label, report_warnings,
+};
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
 #[derive(Serialize)]
@@ -130,6 +132,9 @@ pub fn who(
     println!("{}", builder.build().with(Style::psql()));
     println!();
     println!("{}", describe(&combo, winner, &matches));
+    if let Winner::Global(w) = winner {
+        println!("To change it: {}.", how_to_change(w));
+    }
     if let Some(probe) = &observed {
         println!();
         print!("{}", describe_probe(&combo, probe));

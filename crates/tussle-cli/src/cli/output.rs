@@ -136,3 +136,49 @@ pub(super) fn report_warnings(index: &HotkeyIndex) {
 pub(super) fn layer_label(layer: Layer) -> &'static str {
     layer.name()
 }
+
+/// Where a person would go to change or remove `b`.
+pub(super) fn how_to_change(b: &Binding) -> String {
+    const PANE: &str = "System Settings → Keyboard → Keyboard Shortcuts";
+    match &b.source {
+        BindingSource::SystemSymbolicHotkey {
+            id: Some(id),
+            dispatch: SystemDispatch::BeforeApps,
+        } => format!("{PANE} → {}", settings_section(*id)),
+        BindingSource::SystemSymbolicHotkey {
+            id: None,
+            dispatch: SystemDispatch::BeforeApps,
+        } => "built into macOS; it cannot be changed".to_string(),
+        BindingSource::SystemSymbolicHotkey {
+            dispatch: SystemDispatch::StandardMenuItem,
+            ..
+        } => format!("a standard menu item; {PANE} → App Shortcuts can override it for one app"),
+        BindingSource::AppleMenuItem { .. } => "built into macOS; it cannot be changed".to_string(),
+        BindingSource::StatusMenuItem { .. } => {
+            format!("in {}'s own settings", b.source.owner())
+        }
+        BindingSource::AppMenuItem { .. } => format!(
+            "in {} itself if it lets you, otherwise {PANE} → App Shortcuts: add {} with the menu title \"{}\"",
+            b.source.owner(),
+            b.source.owner(),
+            b.label
+        ),
+        BindingSource::AppMenuOverride { bundle_id, .. } => {
+            format!("{PANE} → App Shortcuts: this is your own override for {bundle_id}")
+        }
+    }
+}
+
+/// Section of the Keyboard Shortcuts pane that lists symbolic hotkey `id`.
+fn settings_section(id: u32) -> &'static str {
+    match id {
+        7..=13 | 27 | 51 | 57 | 98 => "Keyboard",
+        15..=26 | 59 | 175 => "Accessibility",
+        28..=31 | 181 | 182 | 184 => "Screenshots",
+        32 | 33 | 36 | 79..=82 | 118..=121 => "Mission Control",
+        52 | 160 => "Launchpad & Dock",
+        60 | 61 => "Input Sources",
+        64 | 65 => "Spotlight",
+        _ => "the section listing it",
+    }
+}
