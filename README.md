@@ -87,17 +87,26 @@ tussle conflicts
 
 Lists every combo where bindings get in each other's way: two global
 bindings on one combo, or a global binding sitting on a combo that apps
-also use in their menus. "Wins" is the binding that gets the key; "Never
-fires" is everything else on that combo. In the first row below Spotlight
-keeps working and it is Lark's emoji item that is dead. Several apps
-reusing ⌘W in their own menus is not a conflict and is not listed.
+also use in their menus. "wins" is the binding that gets the key; "never
+fires" is everything else on that combo. In the first block below
+Spotlight keeps working and it is Lark's emoji item that is dead. Several
+apps reusing ⌘W in their own menus is not a conflict and is not listed,
+and neither is macOS's own ⌥⌘Esc beating the Force Quit item in every
+app's Apple menu: that is one function reachable twice.
 
 ```text
- Combo      | Kind                  | Wins                                    | Never fires
-------------+-----------------------+-----------------------------------------+---------------------------------------
- cmd+space  | global beats app menu | macOS: Show Spotlight search            | Lark Helper: 表情
- ctrl+1     | global beats app menu | PixPin: 截图                            | Warp: Left Panel: Project Explorer
- ctrl+space | global beats app menu | macOS: Select the previous input source | Warp: New Agent Pane, WebStorm: Basic
+cmd+space  global beats app menu
+  wins         macOS: Show Spotlight search  [system]
+  never fires  Lark Helper: 表情  [app-menu]
+
+ctrl+1  global beats app menu
+  wins         PixPin: 截图  [global-hotkey]
+  never fires  Warp: Left Panel: Project Explorer  [app-menu]
+
+ctrl+space  global beats app menu
+  wins         macOS: Select the previous input source  [system]
+  never fires  Warp: New Agent Pane  [app-menu]
+               WebStorm: Basic  [app-menu]
 ```
 
 ### Filter & group
@@ -110,6 +119,15 @@ tussle scan --group-by owner           # group by app instead of combo
 tussle scan --json                     # JSON for piping to jq
 tussle scan --source symbolichotkeys   # skip the app menu walk; instant
 ```
+
+System shortcuts come from the table macOS itself enforces (Carbon's
+`CopySymbolicHotKeys`), so ⌘Tab, ⌥⌘Esc, ⌃⌘Space and the fn/Globe key
+shortcuts are known even though none of them has an entry in
+`com.apple.symbolichotkeys.plist`, and the enabled state is the real
+one rather than an assumed default. Shortcuts macOS only offers as
+standard menu items in every app (Minimize, Fill, Center) are reported on
+the `app-menu` layer, so they never count as beating an app. Entries
+nobody could name are left out of the `scan` table and kept in `--json`.
 
 `--app` matches both display name and bundle id, so `--app finder`
 works on Chinese-localized macOS where Finder shows as `访达`.

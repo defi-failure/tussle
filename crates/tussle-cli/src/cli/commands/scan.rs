@@ -3,7 +3,8 @@
 use anyhow::{Context, Result};
 use tabled::builder::Builder;
 use tabled::settings::Style;
-use tussle_core::{Binding, ComboToken, HotkeyIndex};
+use tussle_core::sources::symbolichotkeys::UNLABELLED_SYSTEM_SHORTCUT;
+use tussle_core::{Binding, BindingSource, ComboToken, HotkeyIndex};
 
 use crate::cli::GroupBy;
 use crate::cli::output::{BindingJson, emit_json, report_warnings};
@@ -92,6 +93,11 @@ pub fn scan(
         return emit_json(&rows);
     }
 
+    // System entries nothing could name say nothing a reader can act on;
+    // keep them out of the table (JSON above still has them).
+    let unidentified = bindings.iter().filter(|b| is_unidentified(b)).count();
+    bindings.retain(|b| !is_unidentified(b));
+
     if bindings.is_empty() {
         println!("(no bindings found)");
         return Ok(());
@@ -106,5 +112,17 @@ pub fn scan(
     // preceding stderr log lines when both share the same TTY.
     println!();
     println!("{}", builder.build().with(Style::psql()));
+    if unidentified > 0 {
+        println!();
+        println!(
+            "{unidentified} macOS shortcuts without a known name are not listed; \
+             `--json` includes them."
+        );
+    }
     Ok(())
+}
+
+fn is_unidentified(b: &Binding) -> bool {
+    matches!(b.source, BindingSource::SystemSymbolicHotkey { .. })
+        && b.label == UNLABELLED_SYSTEM_SHORTCUT
 }
