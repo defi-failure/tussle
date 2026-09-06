@@ -11,5 +11,5 @@ pub mod sources;
 pub use binding::{Binding, BindingSource, Layer, Scope};
 pub use combo::{ComboToken, Key, KeyCombo, Modifiers, NamedKey};
 pub use error::{ScanError, ScanWarning};
-pub use hotkey_index::HotkeyIndex;
+pub use hotkey_index::{Conflict, ConflictKind, HotkeyIndex, SourceFailure, Winner};
 pub use sources::{Source, SourceScan};
