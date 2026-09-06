@@ -1,10 +1,14 @@
-//! `tussle free` — which combos with a given set of modifiers are unused.
+//! `tussle free` — every key with a given set of modifiers, and whether
+//! it is free. One line per combo: `free` when nothing is bound to it,
+//! `app-menu` when only app menu items use it (free as a global hotkey,
+//! at the cost of those menu items), `taken` when a global binding owns
+//! it.
 
 use anyhow::{Context, Result};
 use serde::Serialize;
 use tussle_core::{Binding, HotkeyIndex, Key, KeyCombo, Modifiers, NamedKey, Scope};
 
-use crate::cli::output::{emit_json, report_warnings};
+use crate::cli::output::{emit_json, print_table, report_warnings};
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
 #[derive(Serialize)]
@@ -52,74 +56,50 @@ pub fn free(
     let index = HotkeyIndex::scan(sources.iter().map(|s| s.as_ref()));
     report_warnings(&index);
 
-    let mut free: Vec<KeyCombo> = Vec::new();
-    let mut app_only: Vec<(KeyCombo, Vec<&Binding>)> = Vec::new();
-    let mut taken: Vec<(KeyCombo, Vec<&Binding>)> = Vec::new();
-    for key in candidate_keys() {
-        let combo = KeyCombo { modifiers, key };
-        let claimants = index.find(&combo);
-        if claimants.is_empty() {
-            free.push(combo);
-        } else if claimants.iter().all(|b| b.source.scope() == Scope::App) {
-            app_only.push((combo, claimants));
-        } else {
-            taken.push((combo, claimants));
-        }
-    }
+    let rows: Vec<(KeyCombo, &'static str, Vec<&Binding>)> = candidate_keys()
+        .into_iter()
+        .map(|key| {
+            let combo = KeyCombo { modifiers, key };
+            let claimants = index.find(&combo);
+            let status = if claimants.is_empty() {
+                "free"
+            } else if claimants.iter().all(|b| b.source.scope() == Scope::App) {
+                "app-menu"
+            } else {
+                "taken"
+            };
+            (combo, status, claimants)
+        })
+        .collect();
 
     if as_json {
-        let mut rows: Vec<FreeJson> = free
+        let out: Vec<FreeJson> = rows
             .iter()
-            .map(|c| FreeJson {
-                combo: c.to_string(),
-                status: "free",
-                owners: vec![],
+            .map(|(combo, status, bs)| FreeJson {
+                combo: combo.to_string(),
+                status,
+                owners: owners(bs),
             })
             .collect();
-        rows.extend(app_only.iter().map(|(c, bs)| FreeJson {
-            combo: c.to_string(),
-            status: "app_menus_only",
-            owners: owners(bs),
-        }));
-        rows.extend(taken.iter().map(|(c, bs)| FreeJson {
-            combo: c.to_string(),
-            status: "taken",
-            owners: owners(bs),
-        }));
-        return emit_json(&rows);
+        return emit_json(&out);
     }
 
-    println!();
-    println!(
-        "Free with {modifiers} ({} of {}): nothing is bound to these anywhere.",
-        free.len(),
-        candidate_keys().len()
-    );
-    println!("  {}", wrap(free.iter().map(ToString::to_string), 76));
-    if !app_only.is_empty() {
-        println!();
-        println!(
-            "Used only inside app menus ({}): free as a global hotkey, but that app's menu \
-             item stops working while the hotkey is active.",
-            app_only.len()
-        );
-        println!(
-            "  {}",
-            wrap(
-                app_only
+    let table: Vec<Vec<String>> = rows
+        .iter()
+        .map(|(combo, status, bs)| {
+            let owner = match *status {
+                "taken" => bs
                     .iter()
-                    .map(|(c, bs)| format!("{c} ({})", owners(bs).join(", "))),
-                76
-            )
-        );
-    }
-    if !taken.is_empty() {
-        println!();
-        println!("Taken globally ({}):", taken.len());
-        for (c, bs) in &taken {
-            println!("  {c:<18} {}", owners_with_labels(bs).join("; "));
-        }
-    }
+                    .filter(|b| b.source.scope() == Scope::Global)
+                    .map(|b| format!("{}: {}", b.source.owner(), b.label))
+                    .collect::<Vec<_>>()
+                    .join("; "),
+                _ => owners(bs).join(", "),
+            };
+            vec![combo.to_string(), (*status).to_string(), owner]
+        })
+        .collect();
+    print_table(&["Combo", "Status", "Owner"], &table);
     Ok(())
 }
 
@@ -128,30 +108,4 @@ fn owners(bs: &[&Binding]) -> Vec<String> {
     names.sort();
     names.dedup();
     names
-}
-
-fn owners_with_labels(bs: &[&Binding]) -> Vec<String> {
-    bs.iter()
-        .filter(|b| b.source.scope() == Scope::Global)
-        .map(|b| format!("{}: {}", b.source.owner(), b.label))
-        .collect()
-}
-
-/// Join items with ", ", breaking lines at about `width` columns.
-fn wrap(items: impl Iterator<Item = String>, width: usize) -> String {
-    let mut out = String::new();
-    let mut col = 0;
-    for (i, item) in items.enumerate() {
-        let sep = if i == 0 { "" } else { ", " };
-        if col > 0 && col + sep.len() + item.chars().count() > width {
-            out.push_str(",\n  ");
-            col = 0;
-        } else {
-            out.push_str(sep);
-            col += sep.len();
-        }
-        col += item.chars().count();
-        out.push_str(&item);
-    }
-    out
 }

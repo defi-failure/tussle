@@ -46,6 +46,11 @@ struct Cli {
     #[arg(long, global = true, value_name = "NAME", action = ArgAction::Append)]
     source: Vec<String>,
 
+    /// Machine-readable tables even on a terminal: tab-separated, no
+    /// header, nothing truncated. This is what piped output gets anyway.
+    #[arg(long, global = true)]
+    plain: bool,
+
     /// Increase log verbosity. `-v` INFO (high-level progress), `-vv` DEBUG
     /// (per-app timing, filter decisions), `-vvv` TRACE (per-AX-call detail
     /// — only useful when diagnosing a specific slow IPC). Overridden by
@@ -125,6 +130,11 @@ enum Command {
         /// or menu reveals. Whatever the key does will happen.
         #[arg(long)]
         probe: bool,
+
+        /// Add a `change:` line saying where the binding that fires can
+        /// be changed or removed.
+        #[arg(long)]
+        explain: bool,
     },
 }
 
@@ -132,6 +142,7 @@ enum Command {
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     init_tracing(cli.verbose);
+    output::set_plain(cli.plain);
     match cli.command {
         Command::Scan {
             json,
@@ -160,10 +171,16 @@ pub fn run() -> Result<()> {
         Command::Conflicts { json } => {
             commands::conflicts::conflicts(json, cli.ax_timeout, cli.ax_concurrency, &cli.source)
         }
-        Command::Who { combo, json, probe } => commands::who::who(
+        Command::Who {
             combo,
             json,
             probe,
+            explain,
+        } => commands::who::who(
+            combo,
+            json,
+            probe,
+            explain,
             cli.ax_timeout,
             cli.ax_concurrency,
             &cli.source,

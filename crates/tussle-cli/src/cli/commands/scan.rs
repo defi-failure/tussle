@@ -1,13 +1,11 @@
 //! `tussle scan` — list every binding every source can see.
 
 use anyhow::{Context, Result};
-use tabled::builder::Builder;
-use tabled::settings::Style;
 use tussle_core::sources::symbolichotkeys::UNLABELLED_SYSTEM_SHORTCUT;
 use tussle_core::{Binding, BindingSource, ComboToken, HotkeyIndex};
 
 use crate::cli::GroupBy;
-use crate::cli::output::{BindingJson, emit_json, report_warnings};
+use crate::cli::output::{BindingJson, emit_json, no_results, print_table, report_warnings};
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
 pub fn scan(
@@ -99,24 +97,33 @@ pub fn scan(
     bindings.retain(|b| !is_unidentified(b));
 
     if bindings.is_empty() {
-        println!("(no bindings found)");
+        // A pattern that matched no running app has already been explained
+        // by its warning; saying "no bindings found" on top is noise.
+        let explained = index
+            .warnings()
+            .iter()
+            .any(|w| matches!(w, tussle_core::ScanWarning::NoMatchingApp { .. }));
+        if !explained {
+            no_results("no bindings found");
+        }
         return Ok(());
     }
 
-    let mut builder = Builder::default();
-    builder.push_record(["Combo", "Owner", "Action"]);
-    for b in &bindings {
-        builder.push_record([&format!("{}", b.combo), b.source.owner(), &b.label]);
-    }
-    // Blank line so the table doesn't visually butt up against any
-    // preceding stderr log lines when both share the same TTY.
-    println!();
-    println!("{}", builder.build().with(Style::psql()));
+    let rows: Vec<Vec<String>> = bindings
+        .iter()
+        .map(|b| {
+            vec![
+                b.combo.to_string(),
+                b.source.owner().to_string(),
+                b.label.clone(),
+            ]
+        })
+        .collect();
+    print_table(&["Combo", "Owner", "Action"], &rows);
     if unidentified > 0 {
-        println!();
-        println!(
-            "{unidentified} macOS shortcuts without a known name are not listed; \
-             `--json` includes them."
+        eprintln!(
+            "note: {unidentified} macOS shortcuts without a known name are not listed; \
+             `--json` includes them"
         );
     }
     Ok(())

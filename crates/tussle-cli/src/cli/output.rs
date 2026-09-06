@@ -2,8 +2,14 @@
 //! prints them. Table rendering stays inside each command so column choices
 //! live next to the command that uses them.
 
+use std::io::IsTerminal;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use anyhow::Result;
 use serde::Serialize;
+use tabled::builder::Builder;
+use tabled::settings::peaker::Priority;
+use tabled::settings::{Style, Width};
 use tussle_core::{Binding, BindingSource, HotkeyIndex, Layer, SystemDispatch, Winner};
 
 #[derive(Serialize)]
@@ -118,6 +124,72 @@ impl<'a> From<Winner<'a>> for VerdictJson<'a> {
     }
 }
 
+/// Force machine-readable table output even on a terminal (`--plain`).
+static PLAIN: AtomicBool = AtomicBool::new(false);
+
+pub(super) fn set_plain(plain: bool) {
+    PLAIN.store(plain, Ordering::Relaxed);
+}
+
+/// Whether table output goes to a person (aligned, headed, fitted to the
+/// terminal) or to a program (tab-separated, no header, nothing cut).
+/// The heuristic is the one in clig.dev and GitHub's CLI: stdout being a
+/// terminal, unless `--plain` was given.
+pub(super) fn human_output() -> bool {
+    !PLAIN.load(Ordering::Relaxed) && std::io::stdout().is_terminal()
+}
+
+/// Print a table the way GitHub's CLI does. On a terminal: a header,
+/// aligned columns, and cells truncated with "…" so every row fits the
+/// terminal width, widest column first. Piped, or with `--plain`: one
+/// row per line, tab-separated, no header, nothing truncated, so `cut`,
+/// `awk` and `grep` see the complete data.
+pub(super) fn print_table(header: &[&str], rows: &[Vec<String>]) {
+    if !human_output() {
+        print!("{}", tsv(rows));
+        return;
+    }
+    let mut builder = Builder::default();
+    builder.push_record(header.iter().copied());
+    for row in rows {
+        builder.push_record(row);
+    }
+    let mut table = builder.build();
+    table.with(Style::psql());
+    if let Some((terminal_size::Width(cols), _)) = terminal_size::terminal_size() {
+        table.with(
+            Width::truncate(usize::from(cols))
+                .suffix("…")
+                .priority(Priority::max(true)),
+        );
+    }
+    println!("{table}");
+}
+
+/// Tab-separated rows, one per line. Tabs and newlines inside a cell
+/// would break the format, so they become spaces.
+pub(super) fn tsv(rows: &[Vec<String>]) -> String {
+    let mut out = String::new();
+    for row in rows {
+        let cells: Vec<String> = row
+            .iter()
+            .map(|c| c.replace(['\t', '\n', '\r'], " "))
+            .collect();
+        out.push_str(&cells.join("\t"));
+        out.push('\n');
+    }
+    out
+}
+
+/// Tell a person that a command found nothing. Goes to stderr, and only
+/// when a person is reading: a script gets an empty stdout and exit 0,
+/// because no results is not a failure.
+pub(super) fn no_results(message: &str) {
+    if human_output() {
+        eprintln!("{message}");
+    }
+}
+
 /// Print any serializable value as pretty-printed JSON to stdout.
 pub(super) fn emit_json<T: Serialize>(value: &T) -> Result<()> {
     println!("{}", serde_json::to_string_pretty(value)?);
@@ -180,5 +252,30 @@ fn settings_section(id: u32) -> &'static str {
         60 | 61 => "Input Sources",
         64 | 65 => "Spotlight",
         _ => "the section listing it",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tsv_is_one_row_per_line_with_cells_sanitised() {
+        let rows = vec![
+            vec![
+                "cmd+w".to_string(),
+                "Safari".to_string(),
+                "Close\tWindow".to_string(),
+            ],
+            vec![
+                "cmd+q".to_string(),
+                "Mail".to_string(),
+                "Quit\nMail".to_string(),
+            ],
+        ];
+        assert_eq!(
+            tsv(&rows),
+            "cmd+w\tSafari\tClose Window\ncmd+q\tMail\tQuit Mail\n"
+        );
     }
 }

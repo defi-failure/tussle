@@ -121,7 +121,6 @@ pub fn doctor(as_json: bool, ax_timeout: f32, ax_concurrency: usize) -> Result<(
     if as_json {
         return emit_json(&checks);
     }
-    println!();
     for c in &checks {
         println!("{:<18} {:<14} {}", c.check, c.status, c.detail);
     }

@@ -9,21 +9,18 @@ machine, and spot conflicts between apps.
 
 ```text
 $ tussle who ctrl+1
-
  Fires | Layer         | Owner  | Action
 -------+---------------+--------+------------------------------
  yes   | global-hotkey | PixPin | 截图
        | app-menu      | Warp   | Left Panel: Project Explorer
  off   | system        | macOS  | Switch to Desktop 1
-
-ctrl+1 fires PixPin (global-hotkey layer): 截图; the other binding never sees this key
 ```
 
 Three things claim ⌃1 here. tussle orders them by where they sit in the
-keyboard pipeline: PixPin registered a global hotkey, so it takes the key
-before Warp's menu item can see it, and macOS's own "Switch to Desktop 1"
-exists but ships switched off. Change or disable the winner and the next
-one down starts working.
+keyboard pipeline and marks the one that gets the key: PixPin registered
+a global hotkey, so it fires before Warp's menu item can see it, and
+macOS's own "Switch to Desktop 1" exists but is switched off. `--explain`
+adds where to change the winner.
 
 ## Install
 
@@ -79,9 +76,14 @@ tussle who
 # Press the hotkey to look up...
 ```
 
-The verdict ends with where to change the winning binding: the System
-Settings section for a system shortcut, the app's own settings for a
-menubar app's hotkey, App Shortcuts for a menu item.
+The `Fires` column is the verdict: `yes` for the global binding that
+gets the key, `contested` when several share the first layer, `app` when
+only app menus claim the combo (the frontmost app handles it), `off` for
+a disabled binding, blank for one that never sees the key. `--explain`
+adds a `change:` line saying
+where the winning binding can be changed: the System Settings section
+for a system shortcut, the app's own settings for a menubar app's hotkey,
+App Shortcuts for a menu item.
 
 Some global hotkeys leave no trace anywhere: apps register them in code
 (`RegisterEventHotKey`), and no file or menu shows them. `--probe` lets
@@ -92,8 +94,15 @@ changed. Whatever the key does will happen.
 ```bash
 tussle who --probe
 # press ctrl+space: the input source switches, and if some app also
-# reacts, it shows up under "Observed".
+# reacts, it shows up as an `observed` line.
 ```
+
+A reaction from an app that no source lists is marked `in no source`:
+the app reacts to the key from its own code, and the app's own settings
+are the only place to change that. When a system shortcut fired and such
+an app reacted too, both really happened: the system shortcut blocks apps
+that claim the key through their menus, not apps that merely watch
+keystrokes.
 
 ### Find a free combo
 
@@ -101,9 +110,19 @@ tussle who --probe
 tussle free ctrl+opt
 ```
 
-Tries every key with those modifiers and sorts the results into free
-everywhere, used only inside app menus (free as a global hotkey, at the
-cost of that menu item), and taken globally.
+One line per key with those modifiers: `free` when nothing is bound to
+it, `app-menu` when only app menu items use it (free as a global hotkey,
+at the cost of those menu items), `taken` when a global binding owns it.
+Pipe through `grep free` for the usable ones.
+
+```text
+ Combo           | Status   | Owner
+-----------------+----------+-----------------------------------------
+ ctrl+opt+a      | free     |
+ ctrl+opt+d      | app-menu | WebStorm
+ ctrl+opt+e      | app-menu | WebStorm
+ ctrl+opt+1      | taken    | PixPin: 截图并复制
+```
 
 ### Check the setup
 
@@ -122,28 +141,24 @@ missing piece hides and where to grant it.
 tussle conflicts
 ```
 
-Lists every combo where bindings get in each other's way: two global
-bindings on one combo, or a global binding sitting on a combo that apps
-also use in their menus. "wins" is the binding that gets the key; "never
-fires" is everything else on that combo. In the first block below
-Spotlight keeps working and it is Lark's emoji item that is dead. Several
-apps reusing ⌘W in their own menus is not a conflict and is not listed,
-and neither is macOS's own ⌥⌘Esc beating the Force Quit item in every
-app's Apple menu: that is one function reachable twice.
+One block per combo for a person; one tab-separated line per binding
+(combo, kind, role, layer, owner, action) when piped. `wins` is the
+binding that gets the key; `never fires` is everything else on that
+combo; `contested` means several global bindings share the first layer.
+Apps reusing ⌘W
+in their own menus is not a conflict and is not listed, and neither is
+macOS's own ⌥⌘Esc beating the Force Quit item in every app's Apple menu.
 
 ```text
-cmd+space  global beats app menu
-  wins         macOS: Show Spotlight search  [system]
-  never fires  Lark Helper: 表情  [app-menu]
-
-ctrl+1  global beats app menu
-  wins         PixPin: 截图  [global-hotkey]
-  never fires  Warp: Left Panel: Project Explorer  [app-menu]
-
-ctrl+space  global beats app menu
-  wins         macOS: Select the previous input source  [system]
-  never fires  Warp: New Agent Pane  [app-menu]
-               WebStorm: Basic  [app-menu]
+ Combo      | Kind     | Role        | Layer         | Owner       | Action
+------------+----------+-------------+---------------+-------------+----------------------------------
+ cmd+space  | shadowed | wins        | system        | macOS       | Show Spotlight search
+ cmd+space  | shadowed | never fires | app-menu      | Lark Helper | 表情
+ ctrl+1     | shadowed | wins        | global-hotkey | PixPin      | 截图
+ ctrl+1     | shadowed | never fires | app-menu      | Warp        | Left Panel: Project Explorer
+ ctrl+space | shadowed | wins        | system        | macOS       | Select the previous input source
+ ctrl+space | shadowed | never fires | app-menu      | Warp        | New Agent Pane
+ ctrl+space | shadowed | never fires | app-menu      | WebStorm    | Basic
 ```
 
 ### Filter & group
@@ -165,6 +180,15 @@ one rather than an assumed default. Shortcuts macOS only offers as
 standard menu items in every app (Minimize, Fill, Center) are reported on
 the `app-menu` layer, so they never count as beating an app. Entries
 nobody could name are left out of the `scan` table and kept in `--json`.
+
+### Terminal and pipes
+
+Output follows the usual command-line conventions. On a terminal, tables
+have a header and are truncated with `…` to fit the terminal width. Piped
+into another program, or with `--plain`, they are tab-separated with no
+header and nothing truncated, so `cut`, `awk` and `grep` see everything.
+`--json` gives the full structure. Notes and warnings go to stderr;
+finding nothing is not an error and exits 0.
 
 `--app` matches both display name and bundle id, so `--app finder`
 works on Chinese-localized macOS where Finder shows as `访达`.

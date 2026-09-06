@@ -1,14 +1,20 @@
 //! `tussle conflicts` — combos where bindings get in each other's way.
+//!
+//! For a person: one block per combo, its kind (`shadowed` or
+//! `contested`), then the binding that `wins` and every binding that
+//! `never fires`, one per line. For a program (piped, or `--plain`):
+//! one tab-separated line per binding with combo, kind, role, layer,
+//! owner and action. Nothing is printed when there are none.
 
 use anyhow::Result;
 use serde::Serialize;
 use tussle_core::{Binding, Conflict, ConflictKind, HotkeyIndex, Winner};
 
-use crate::cli::output::{BindingJson, VerdictJson, emit_json, layer_label, report_warnings};
+use crate::cli::output::{
+    BindingJson, VerdictJson, emit_json, human_output, layer_label, no_results, report_warnings,
+    tsv,
+};
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
-
-/// How many losing bindings to list per conflict before summarising.
-const MAX_LISTED_LOSERS: usize = 6;
 
 #[derive(Serialize)]
 struct ConflictJson<'a> {
@@ -46,24 +52,44 @@ pub fn conflicts(
     }
 
     if found.is_empty() {
-        println!("(no conflicts found)");
-        return Ok(());
+        no_results("no conflicts");
+    } else if human_output() {
+        let blocks: Vec<String> = found.iter().map(render).collect();
+        print!("{}", blocks.join("\n"));
+    } else {
+        let mut rows = Vec::new();
+        for c in &found {
+            for b in &c.bindings {
+                if let Some(role) = role(c, b) {
+                    rows.push(vec![
+                        c.combo.to_string(),
+                        kind_label(c.kind).to_string(),
+                        role.to_string(),
+                        layer_label(b.source.layer()).to_string(),
+                        b.source.owner().to_string(),
+                        b.label.clone(),
+                    ]);
+                }
+            }
+        }
+        print!("{}", tsv(&rows));
     }
-
-    // One block per conflict: a table cannot hold forty losers on a line.
-    println!();
-    for c in &found {
-        println!("{}", render(c));
-    }
-    println!(
-        "{} conflict{}. \"wins\" gets the key; \"never fires\" no longer reaches its owner.",
-        found.len(),
-        if found.len() == 1 { "" } else { "s" }
-    );
     Ok(())
 }
 
-/// Stable identifier used in JSON.
+/// Role of `b` in conflict `c`; `None` for a binding owned by the winner,
+/// which is the same function reachable twice rather than a loser.
+fn role(c: &Conflict<'_>, b: &Binding) -> Option<&'static str> {
+    Some(match c.winner {
+        Winner::Global(w) if std::ptr::eq(w, b) => "wins",
+        Winner::Global(w) if w.source.owner() == b.source.owner() => return None,
+        Winner::Global(_) => "never fires",
+        Winner::Contested(layer) if b.source.layer() == layer => "contested",
+        Winner::Contested(_) => "never fires",
+        Winner::FrontmostApp | Winner::Nobody => "app",
+    })
+}
+
 fn kind_label(kind: ConflictKind) -> &'static str {
     match kind {
         ConflictKind::Contested => "contested",
@@ -81,51 +107,38 @@ fn describe(b: &Binding) -> String {
 }
 
 fn render(c: &Conflict<'_>) -> String {
-    let mut out = String::new();
+    let mut out = format!("{}  {}\n", c.combo, kind_label(c.kind));
     match c.winner {
         Winner::Global(w) => {
-            out.push_str(&format!("{}  {}\n", c.combo, "global beats app menu"));
             out.push_str(&format!("  wins         {}\n", describe(w)));
-            let losers: Vec<&Binding> = c
+            // Bindings owned by the winner are the same function reachable
+            // twice, not losers.
+            let losers = c
                 .bindings
                 .iter()
                 .copied()
-                .filter(|b| !std::ptr::eq(*b, w) && b.source.owner() != w.source.owner())
-                .collect();
-            push_list(&mut out, "never fires", &losers);
+                .filter(|b| !std::ptr::eq(*b, w) && b.source.owner() != w.source.owner());
+            push_lines(&mut out, "never fires", losers);
         }
         Winner::Contested(layer) => {
-            out.push_str(&format!(
-                "{}  global vs global on the {} layer; which one fires cannot be told from outside\n",
-                c.combo,
-                layer_label(layer)
-            ));
             let (contenders, rest): (Vec<&Binding>, Vec<&Binding>) = c
                 .bindings
                 .iter()
                 .copied()
                 .partition(|b| b.source.layer() == layer);
-            push_list(&mut out, "contested", &contenders);
-            push_list(&mut out, "never fires", &rest);
+            push_lines(&mut out, "contested", contenders.into_iter());
+            push_lines(&mut out, "never fires", rest.into_iter());
         }
         Winner::FrontmostApp | Winner::Nobody => {
-            out.push_str(&format!("{}\n", c.combo));
-            push_list(&mut out, "bindings", &c.bindings);
+            push_lines(&mut out, "bindings", c.bindings.iter().copied());
         }
     }
     out
 }
 
-fn push_list(out: &mut String, heading: &str, items: &[&Binding]) {
-    for (i, b) in items.iter().take(MAX_LISTED_LOSERS).enumerate() {
+fn push_lines<'a>(out: &mut String, heading: &str, items: impl Iterator<Item = &'a Binding>) {
+    for (i, b) in items.enumerate() {
         let head = if i == 0 { heading } else { "" };
         out.push_str(&format!("  {head:<12} {}\n", describe(b)));
-    }
-    if items.len() > MAX_LISTED_LOSERS {
-        out.push_str(&format!(
-            "  {:<12} … and {} more\n",
-            "",
-            items.len() - MAX_LISTED_LOSERS
-        ));
     }
 }
