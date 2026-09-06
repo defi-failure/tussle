@@ -79,6 +79,14 @@ enum Command {
         #[arg(long, value_enum, value_name = "KEY", default_value_t = GroupBy::Combo)]
         group_by: GroupBy,
     },
+    /// List combos where bindings get in each other's way: two global
+    /// bindings on one combo, or a global binding sitting on a combo that
+    /// apps also use in their menus.
+    Conflicts {
+        /// Emit JSON instead of a human-readable table.
+        #[arg(long)]
+        json: bool,
+    },
     /// Look up which sources own a key combination.
     Who {
         /// Combo to look up, e.g. `cmd+opt+b`. Omit to enter interactive
@@ -102,6 +110,9 @@ pub fn run() -> Result<()> {
             app,
             group_by,
         } => commands::scan::scan(json, cli.ax_timeout, cli.ax_concurrency, key, app, group_by),
+        Command::Conflicts { json } => {
+            commands::conflicts::conflicts(json, cli.ax_timeout, cli.ax_concurrency)
+        }
         Command::Who { combo, json } => {
             commands::who::who(combo, json, cli.ax_timeout, cli.ax_concurrency)
         }
