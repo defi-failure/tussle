@@ -21,6 +21,11 @@ const MAX_MENU_DEPTH: usize = 16;
 /// AX title of the Apple menu, the same in every locale.
 const APPLE_MENU_TITLE: &str = "Apple";
 
+/// Hosts every input method's status menu. The shortcuts listed there
+/// (Tab to reorder candidates, ⌥⇧B for kaomoji) only work while that
+/// input method is composing text; they are not global hotkeys.
+const TEXT_INPUT_MENU_AGENT: &str = "com.apple.TextInputMenuAgent";
+
 /// A `CannotComplete` that took at least this share of the configured
 /// timeout is a timeout; a faster one means the process has no
 /// Accessibility server and is not worth retrying.
@@ -168,9 +173,10 @@ impl Walk<'_> {
                 let bundle_id = self.app.bundle_id.clone().unwrap_or_default();
                 let app_name = self.app.app_name.clone();
                 let menu_path = new_path.clone();
+                let ime_menu = bundle_id == TEXT_INPUT_MENU_AGENT;
                 let source = if menu_path.first().is_some_and(|top| top == APPLE_MENU_TITLE) {
                     BindingSource::AppleMenuItem { menu_path }
-                } else if self.status_bar && looks_like_global_hotkey(&combo) {
+                } else if self.status_bar && !ime_menu && looks_like_global_hotkey(&combo) {
                     BindingSource::StatusMenuItem {
                         bundle_id,
                         app_name,
@@ -229,6 +235,11 @@ impl Walk<'_> {
 /// verdict, a false one floods `conflicts` with nonsense.
 fn looks_like_global_hotkey(combo: &KeyCombo) -> bool {
     let m = combo.modifiers;
+    if m.is_empty() {
+        // A bare key is a menu accelerator, never a global hotkey; bare
+        // function keys (F11 Show Desktop style) are the exception.
+        return matches!(combo.key, Key::Named(k) if is_function_key(k));
+    }
     !m.contains(Modifiers::CMD)
         || m.contains(Modifiers::CTRL)
         || m.contains(Modifiers::FN)
@@ -349,6 +360,18 @@ mod tests {
         assert!(looks_like_global_hotkey(&combo(
             Modifiers::CMD,
             Key::Named(NamedKey::F5)
+        )));
+        assert!(!looks_like_global_hotkey(&combo(
+            Modifiers::empty(),
+            Key::Named(NamedKey::Tab)
+        )));
+        assert!(!looks_like_global_hotkey(&combo(
+            Modifiers::empty(),
+            Key::Char('a')
+        )));
+        assert!(looks_like_global_hotkey(&combo(
+            Modifiers::empty(),
+            Key::Named(NamedKey::F11)
         )));
     }
 
