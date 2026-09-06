@@ -13,3 +13,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Its tags are Rust versions, not action versions. The MSRV job pins
+      # the compiler through the `toolchain` input instead.
+      - dependency-name: dtolnay/rust-toolchain
