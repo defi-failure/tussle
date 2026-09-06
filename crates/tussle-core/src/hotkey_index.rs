@@ -229,7 +229,7 @@ pub(crate) fn winner_of<'a>(ordered: &[&'a Binding]) -> Winner<'a> {
 mod tests {
     use super::*;
     use crate::sources::SourceScan;
-    use crate::{BindingSource, Key, Modifiers};
+    use crate::{BindingSource, Key, Modifiers, SystemDispatch};
 
     fn combo(c: char) -> KeyCombo {
         KeyCombo {
@@ -241,7 +241,10 @@ mod tests {
     fn system(id: u32, c: char, label: &str) -> Binding {
         Binding {
             combo: combo(c),
-            source: BindingSource::SystemSymbolicHotkey { id: Some(id) },
+            source: BindingSource::SystemSymbolicHotkey {
+                id: Some(id),
+                dispatch: SystemDispatch::BeforeApps,
+            },
             label: label.into(),
             enabled: true,
         }

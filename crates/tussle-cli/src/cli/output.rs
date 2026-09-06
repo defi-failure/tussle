@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use serde::Serialize;
-use tussle_core::{Binding, BindingSource, HotkeyIndex, Layer, Winner};
+use tussle_core::{Binding, BindingSource, HotkeyIndex, Layer, SystemDispatch, Winner};
 
 #[derive(Serialize)]
 pub(super) struct BindingJson<'a> {
@@ -21,6 +21,7 @@ pub(super) struct BindingJson<'a> {
 enum SourceJson {
     SystemSymbolicHotkey {
         id: Option<u32>,
+        dispatch: &'static str,
     },
     AppMenuOverride {
         bundle_id: String,
@@ -47,8 +48,14 @@ impl<'a> From<&'a Binding> for BindingJson<'a> {
             layer: b.source.layer().name(),
             enabled: b.enabled,
             source: match &b.source {
-                BindingSource::SystemSymbolicHotkey { id } => {
-                    SourceJson::SystemSymbolicHotkey { id: *id }
+                BindingSource::SystemSymbolicHotkey { id, dispatch } => {
+                    SourceJson::SystemSymbolicHotkey {
+                        id: *id,
+                        dispatch: match dispatch {
+                            SystemDispatch::BeforeApps => "before_apps",
+                            SystemDispatch::StandardMenuItem => "standard_menu_item",
+                        },
+                    }
                 }
                 BindingSource::AppMenuOverride {
                     bundle_id,

@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail};
 use tussle_core::Source;
 use tussle_core::sources::accessibility::{self, Accessibility};
 use tussle_core::sources::nsuserkeyequivalents::AppMenuOverrides;
-use tussle_core::sources::symbolichotkeys::SymbolicHotkeys;
+use tussle_core::sources::symbolichotkeys::{LiveTable, SymbolicHotkeys};
 
 /// Build the default macOS source set, optionally restricted to the
 /// names in `only`.
@@ -20,9 +20,10 @@ pub(super) fn default_sources(
 ) -> Result<Vec<Box<dyn Source>>> {
     let prefs = dirs::preference_dir().context("could not locate user preferences directory")?;
     let mut sources: Vec<Box<dyn Source>> = vec![
-        Box::new(SymbolicHotkeys::new(
-            prefs.join("com.apple.symbolichotkeys.plist"),
-        )),
+        Box::new(
+            SymbolicHotkeys::new(prefs.join("com.apple.symbolichotkeys.plist"))
+                .with_live_table(LiveTable::System),
+        ),
         Box::new(AppMenuOverrides::new(prefs.clone())),
         Box::new(Accessibility::new(ax_timeout, ax_concurrency).with_bundle_filter(app_filter)),
     ];

@@ -13,21 +13,52 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::combo::vk_to_named;
-use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, NamedKey, ScanError};
+
+use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers, ScanError, ScanWarning};
+use known::{builtin_for, dispatch_for, known_hotkeys, label_for};
 
 use super::{Source, SourceScan};
+
+mod known;
+mod live;
+
+pub use live::{LiveHotkey, NO_KEY};
 
 /// Reads `com.apple.symbolichotkeys.plist` and merges its contents with
 /// macOS's hardcoded default table.
 #[derive(Debug, Clone)]
 pub struct SymbolicHotkeys {
     plist_path: PathBuf,
+    live: LiveTable,
+}
+
+/// Where the effective system table comes from.
+#[derive(Debug, Clone)]
+pub enum LiveTable {
+    /// Only the plist plus the built-in defaults table. Deterministic;
+    /// what tests use, and the fallback when the system table cannot be
+    /// read.
+    None,
+    /// Ask macOS via `CopySymbolicHotKeys()`.
+    System,
+    /// A captured table, for tests and for reproducing another machine.
+    Snapshot(Vec<LiveHotkey>),
 }
 
 impl SymbolicHotkeys {
-    /// Construct a parser pointed at the given plist path.
+    /// Read `plist_path` and merge it with the built-in defaults table.
     pub fn new(plist_path: PathBuf) -> Self {
-        Self { plist_path }
+        Self {
+            plist_path,
+            live: LiveTable::None,
+        }
+    }
+
+    /// Use the given table as the truth for combos and enabled state; the
+    /// plist and defaults then only supply ids and labels.
+    pub fn with_live_table(mut self, live: LiveTable) -> Self {
+        self.live = live;
+        self
     }
 }
 
@@ -37,7 +68,35 @@ impl Source for SymbolicHotkeys {
     }
 
     fn scan(&self) -> Result<SourceScan, ScanError> {
-        scan(&self.plist_path).map(SourceScan::from)
+        let rows = match &self.live {
+            LiveTable::None => None,
+            LiveTable::Snapshot(rows) => Some(rows.clone()),
+            LiveTable::System => match live::read_system_table() {
+                Ok(rows) => Some(rows),
+                Err(message) => {
+                    tracing::warn!(%message, "system hotkey table unavailable, using plist only");
+                    None
+                }
+            },
+        };
+        let Some(rows) = rows else {
+            return scan(&self.plist_path).map(SourceScan::from);
+        };
+        // With the live table in hand the plist is only a source of ids and
+        // labels, so a missing or broken one degrades to unlabeled entries.
+        let mut out = SourceScan::default();
+        let overrides = match parse_overrides(&self.plist_path) {
+            Ok(overrides) => overrides,
+            Err(e) => {
+                out.warnings.push(ScanWarning::Skipped {
+                    path: self.plist_path.clone(),
+                    message: e.to_string(),
+                });
+                HashMap::new()
+            }
+        };
+        out.bindings = merge_live(&rows, &overrides);
+        Ok(out)
     }
 }
 
@@ -81,7 +140,10 @@ enum Override {
 /// `enabled = false` whenever a combo is known for them.
 fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
     let overrides = parse_overrides(path)?;
-    let defaults = macos_defaults();
+    let defaults: Vec<_> = known_hotkeys()
+        .into_iter()
+        .filter(|k| k.combo.is_some())
+        .collect();
 
     let mut bindings = Vec::new();
     let mut handled: HashSet<u32> = HashSet::new();
@@ -91,11 +153,12 @@ fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
     // which is not always "on".
     for d in &defaults {
         handled.insert(d.id);
+        let default_combo = d.combo.expect("filtered to entries with a combo");
         let (combo, enabled) = match overrides.get(&d.id) {
-            Some(Override::Disabled(custom)) => (custom.unwrap_or(d.combo), false),
+            Some(Override::Disabled(custom)) => (custom.unwrap_or(default_combo), false),
             Some(Override::Custom(c)) => (*c, true),
-            Some(Override::EnabledWithDefault) => (d.combo, true),
-            None => (d.combo, d.enabled),
+            Some(Override::EnabledWithDefault) => (default_combo, true),
+            None => (default_combo, d.enabled),
         };
         bindings.push(emit(d.id, combo, enabled));
     }
@@ -114,7 +177,7 @@ fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
     }
 
     bindings.sort_by_key(|b| {
-        if let BindingSource::SystemSymbolicHotkey { id: Some(id) } = &b.source {
+        if let BindingSource::SystemSymbolicHotkey { id: Some(id), .. } = &b.source {
             *id
         } else {
             unreachable!("this parser only emits SystemSymbolicHotkey bindings")
@@ -127,12 +190,64 @@ fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
 fn emit(id: u32, combo: KeyCombo, enabled: bool) -> Binding {
     Binding {
         combo,
-        source: BindingSource::SystemSymbolicHotkey { id: Some(id) },
+        source: BindingSource::SystemSymbolicHotkey {
+            id: Some(id),
+            dispatch: dispatch_for(Some(id), &combo),
+        },
         label: label_for(id)
             .map(str::to_owned)
             .unwrap_or_else(|| format!("Symbolic hotkey #{id}")),
         enabled,
     }
+}
+
+/// Bindings from the live table, labelled through the plist and the
+/// defaults table wherever a combo can be tied to an id.
+fn merge_live(rows: &[LiveHotkey], overrides: &HashMap<u32, Override>) -> Vec<Binding> {
+    // Defaults first, then the user's own combos on top: if Spotlight was
+    // moved to ⌥Space, ⌥Space is 64 and ⌘Space no longer is.
+    let mut ids_by_combo: HashMap<KeyCombo, u32> = HashMap::new();
+    for d in known_hotkeys() {
+        if let Some(combo) = d.combo {
+            ids_by_combo.insert(combo, d.id);
+        }
+    }
+    for (id, entry) in overrides {
+        match entry {
+            Override::Custom(c) | Override::Disabled(Some(c)) => {
+                ids_by_combo.insert(*c, *id);
+            }
+            Override::Disabled(None) | Override::EnabledWithDefault => {}
+        }
+    }
+
+    let mut seen: HashSet<(KeyCombo, bool)> = HashSet::new();
+    let mut bindings = Vec::new();
+    for row in rows {
+        let Some(combo) = row.combo() else {
+            continue;
+        };
+        if !seen.insert((combo, row.enabled)) {
+            continue;
+        }
+        let id = ids_by_combo.get(&combo).copied();
+        let label = id
+            .and_then(label_for)
+            .map(str::to_owned)
+            .or_else(|| builtin_for(&combo).map(|b| b.label.to_owned()))
+            .or_else(|| id.map(|id| format!("Symbolic hotkey #{id}")))
+            .unwrap_or_else(|| "macOS shortcut".to_owned());
+        bindings.push(Binding {
+            combo,
+            source: BindingSource::SystemSymbolicHotkey {
+                id,
+                dispatch: dispatch_for(id, &combo),
+            },
+            label,
+            enabled: row.enabled,
+        });
+    }
+    bindings
 }
 
 fn parse_overrides(path: &Path) -> Result<HashMap<u32, Override>, ScanError> {
@@ -205,146 +320,6 @@ fn custom_combo(entry: &plist::Dictionary) -> Option<KeyCombo> {
     Some(KeyCombo {
         modifiers: decode_modifiers(mask as u64),
         key: decode_key(char_code, vk),
-    })
-}
-
-/// macOS default bindings for symbolic hotkey IDs, hand-curated against
-/// macOS Tahoe (26.x).
-///
-/// **Maintenance** (do this once per macOS major release):
-///
-///   1. On a fresh install of the new macOS, open System Settings → Keyboard
-///      → Keyboard Shortcuts and note the default for each ID.
-///   2. Cross-reference IDs with the contents of
-///      `~/Library/Preferences/com.apple.symbolichotkeys.plist` after toggling
-///      shortcuts in System Settings (the file fills in as you interact).
-///   3. Update / add entries below; bump the version comment.
-///
-/// **Coverage** is intentionally partial — only IDs we're confident about
-/// are listed. Unknown IDs that the user customizes are still surfaced
-/// (with a generic "Symbolic hotkey #N" label) by the second pass in `scan`.
-///
-/// **Sources**: combos verified against Apple Support HT201236 (Mac keyboard
-/// shortcuts), virtual keycodes from `<HIToolbox/Events.h>`, and System
-/// Settings on a Tahoe install.
-/// One entry of macOS's built-in symbolic hotkey table.
-struct DefaultHotkey {
-    id: u32,
-    combo: KeyCombo,
-    /// Whether macOS ships the shortcut switched on. A user who never
-    /// touched it has no plist entry, so this is the state that applies.
-    enabled: bool,
-}
-
-fn macos_defaults() -> Vec<DefaultHotkey> {
-    use NamedKey::*;
-    let cmd = Modifiers::CMD;
-    let shift = Modifiers::SHIFT;
-    let ctrl = Modifiers::CTRL;
-    let opt = Modifiers::OPT;
-    let combo = |m, k| KeyCombo {
-        modifiers: m,
-        key: k,
-    };
-    let on = |id, combo| DefaultHotkey {
-        id,
-        combo,
-        enabled: true,
-    };
-    let off = |id, combo| DefaultHotkey {
-        id,
-        combo,
-        enabled: false,
-    };
-
-    vec![
-        // Mission Control / Spaces
-        on(32, combo(ctrl, Key::Named(Up))),
-        on(33, combo(ctrl, Key::Named(Down))),
-        on(79, combo(ctrl, Key::Named(Left))),
-        on(81, combo(ctrl, Key::Named(Right))),
-        // "Switch to Desktop N" only appears in System Settings once a
-        // second desktop exists, and ships unchecked even then. Verified
-        // on Tahoe: with two desktops and no plist entry, ⌃1 reaches apps.
-        off(118, combo(ctrl, Key::Char('1'))),
-        off(119, combo(ctrl, Key::Char('2'))),
-        off(120, combo(ctrl, Key::Char('3'))),
-        off(121, combo(ctrl, Key::Char('4'))),
-        // Screenshots
-        on(28, combo(shift | cmd, Key::Char('3'))),
-        on(29, combo(ctrl | shift | cmd, Key::Char('3'))),
-        on(30, combo(shift | cmd, Key::Char('4'))),
-        on(31, combo(ctrl | shift | cmd, Key::Char('4'))),
-        on(184, combo(shift | cmd, Key::Char('5'))),
-        // Spotlight
-        on(64, combo(cmd, Key::Named(Space))),
-        on(65, combo(cmd | opt, Key::Named(Space))),
-        // Input source switching
-        on(60, combo(ctrl, Key::Named(Space))),
-        on(61, combo(ctrl | opt, Key::Named(Space))),
-    ]
-}
-
-/// Human-readable label for a known symbolic hotkey ID, or `None` if we don't
-/// have a mapping yet. Labels track Apple's wording in System Settings →
-/// Keyboard → Keyboard Shortcuts.
-///
-/// Coverage is partial; new IDs should be added as they show up in real
-/// fixtures rather than guessed at.
-fn label_for(id: u32) -> Option<&'static str> {
-    Some(match id {
-        // Keyboard navigation (Keyboard Access pane)
-        7 => "Move focus to the menu bar",
-        8 => "Move focus to the Dock",
-        9 => "Move focus to the active or next window",
-        10 => "Move focus to the window toolbar",
-        11 => "Move focus to the floating window",
-        12 => "Toggle keyboard access",
-        13 => "Change the way Tab moves focus",
-        27 => "Move focus to next window in application",
-        51 => "Move focus to the window drawer",
-        57 => "Move focus to the status menus",
-
-        // Screenshots
-        28 => "Save picture of screen as a file",
-        29 => "Copy picture of screen to the clipboard",
-        30 => "Save picture of selected area as a file",
-        31 => "Copy picture of selected area to the clipboard",
-        184 => "Screenshot and recording options",
-
-        // Mission Control
-        32 => "Mission Control",
-        33 => "Application windows",
-        36 => "Show Desktop",
-
-        // Spotlight
-        64 => "Show Spotlight search",
-        65 => "Show Finder search window",
-
-        // Input sources
-        60 => "Select the previous input source",
-        61 => "Select the next source in the Input menu",
-
-        // Spaces (the duplicate IDs are the regular vs. modified-arrow forms)
-        79 | 80 => "Move left a space",
-        81 | 82 => "Move right a space",
-        118 => "Switch to Desktop 1",
-        119 => "Switch to Desktop 2",
-        120 => "Switch to Desktop 3",
-        121 => "Switch to Desktop 4",
-
-        // Other system
-        52 => "Toggle Dock hiding",
-        59 => "Toggle VoiceOver",
-        160 => "Show Launchpad",
-        163 => "Show Notification Center",
-        175 => "Toggle Do Not Disturb",
-
-        // Touch Bar
-        181 => "Save picture of the Touch Bar as a file",
-        182 => "Copy picture of the Touch Bar to the clipboard",
-
-        _ => return None,
     })
 }
 

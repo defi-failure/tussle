@@ -8,7 +8,7 @@ mod error;
 mod hotkey_index;
 pub mod sources;
 
-pub use binding::{Binding, BindingSource, Layer, Scope};
+pub use binding::{Binding, BindingSource, Layer, Scope, SystemDispatch};
 pub use combo::{ComboToken, Key, KeyCombo, Modifiers, NamedKey};
 pub use error::{ScanError, ScanWarning};
 pub use hotkey_index::{Conflict, ConflictKind, HotkeyIndex, SourceFailure, Winner};

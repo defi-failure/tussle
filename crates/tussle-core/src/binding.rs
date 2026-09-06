@@ -28,7 +28,12 @@ pub enum BindingSource {
     /// `id` is the symbolic hotkey numeric identifier (e.g. 64 = Spotlight)
     /// when the entry is one the user can see in System Settings; `None`
     /// for shortcuts macOS registers without exposing an id, such as ⌘Tab.
-    SystemSymbolicHotkey { id: Option<u32> },
+    /// `dispatch` says whether macOS grabs the key before apps or merely
+    /// offers it as a standard menu item.
+    SystemSymbolicHotkey {
+        id: Option<u32>,
+        dispatch: SystemDispatch,
+    },
 
     /// A per-app menu-item override stored in the app's
     /// `NSUserKeyEquivalents` dictionary at
@@ -71,6 +76,24 @@ pub enum BindingSource {
         /// Menu hierarchy path to the item, top-level first.
         menu_path: Vec<String>,
     },
+}
+
+/// How macOS delivers one of its own shortcuts.
+///
+/// The system hotkey table mixes two very different things. Spotlight,
+/// Mission Control or ⌘Tab are handled by the window server before any
+/// app sees the key. Minimize, Fill, Center or Emoji & Symbols are
+/// standard menu items that AppKit adds to every app's menus; the
+/// frontmost app's own menu handles them, and an app that binds the same
+/// combo to something else simply wins. Only the first kind can shadow
+/// an app's shortcut.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SystemDispatch {
+    /// The window server handles it before any app sees the key.
+    BeforeApps,
+    /// Offered to every app as a standard menu item; the frontmost app
+    /// dispatches it like any other menu shortcut.
+    StandardMenuItem,
 }
 
 /// Where in macOS's keyboard pipeline a binding intercepts the keystroke.
@@ -136,7 +159,14 @@ impl BindingSource {
     /// global bindings share a combo.
     pub fn layer(&self) -> Layer {
         match self {
-            BindingSource::SystemSymbolicHotkey { .. } => Layer::System,
+            BindingSource::SystemSymbolicHotkey {
+                dispatch: SystemDispatch::BeforeApps,
+                ..
+            } => Layer::System,
+            BindingSource::SystemSymbolicHotkey {
+                dispatch: SystemDispatch::StandardMenuItem,
+                ..
+            } => Layer::AppMenu,
             BindingSource::StatusMenuItem { .. } => Layer::GlobalHotkey,
             BindingSource::AppMenuOverride { .. } | BindingSource::AppMenuItem { .. } => {
                 Layer::AppMenu
@@ -189,7 +219,10 @@ mod tests {
 
     #[test]
     fn owner_for_symbolic_hotkey_is_macos() {
-        let s = BindingSource::SystemSymbolicHotkey { id: Some(64) };
+        let s = BindingSource::SystemSymbolicHotkey {
+            id: Some(64),
+            dispatch: SystemDispatch::BeforeApps,
+        };
         assert_eq!(s.owner(), "macOS");
     }
 
@@ -224,7 +257,10 @@ mod tests {
 
     #[test]
     fn bundle_id_is_none_for_system_hotkey() {
-        let s = BindingSource::SystemSymbolicHotkey { id: Some(64) };
+        let s = BindingSource::SystemSymbolicHotkey {
+            id: Some(64),
+            dispatch: SystemDispatch::BeforeApps,
+        };
         assert!(s.bundle_id().is_none());
     }
 
@@ -266,9 +302,24 @@ mod tests {
     }
 
     #[test]
+    fn standard_menu_defaults_are_app_scoped() {
+        let minimize = BindingSource::SystemSymbolicHotkey {
+            id: None,
+            dispatch: SystemDispatch::StandardMenuItem,
+        };
+        assert_eq!(minimize.layer(), Layer::AppMenu);
+        assert_eq!(minimize.scope(), Scope::App);
+        assert_eq!(minimize.owner(), "macOS");
+    }
+
+    #[test]
     fn sources_map_to_layers() {
         assert_eq!(
-            BindingSource::SystemSymbolicHotkey { id: Some(64) }.layer(),
+            BindingSource::SystemSymbolicHotkey {
+                id: Some(64),
+                dispatch: SystemDispatch::BeforeApps,
+            }
+            .layer(),
             Layer::System
         );
         let override_ = BindingSource::AppMenuOverride {
