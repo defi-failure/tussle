@@ -24,7 +24,16 @@ disable to free a combo.
 
 ## Install
 
-No prebuilt binaries yet. Build from source:
+Installer script (puts `tussle` in `~/.cargo/bin`):
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/defi-failure/tussle/releases/latest/download/tussle-cli-installer.sh | sh
+```
+
+Prebuilt tarballs for Apple Silicon and Intel are on the
+[Releases](https://github.com/defi-failure/tussle/releases) page.
+
+From source (requires Rust 1.88+):
 
 ```bash
 git clone https://github.com/defi-failure/tussle.git
@@ -32,8 +41,8 @@ cd tussle
 cargo install --path crates/tussle-cli
 ```
 
-Requires macOS and Rust 1.88+. Uninstall with
-`cargo uninstall tussle-cli`.
+Uninstall by deleting `~/.cargo/bin/tussle`, or `cargo uninstall tussle-cli`
+if you built from source.
 
 ## Usage
 
@@ -94,12 +103,11 @@ Early. macOS only.
 
 ## TODO
 
-- Pre-built binaries on GitHub Releases.
 - Third-party launcher parsers: Karabiner, Raycast, BetterTouchTool,
   Hammerspoon, Keyboard Maestro.
+- Homebrew tap.
 - Persistent cache for instant repeat lookups.
 - `tussle diff` — what changed since the last scan.
-- Homebrew tap.
 - GUI (likely a SwiftUI menu-bar app?).
 
 ## License
