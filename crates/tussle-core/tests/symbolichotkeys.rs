@@ -89,6 +89,12 @@ fn parses_customized_fixture() {
             key: Key::Char('1'),
         }
     );
+    // No plist entry for 118 means macOS's own default applies, and the
+    // desktop-switching shortcuts ship switched off.
+    assert!(
+        !desktop_1.enabled,
+        "Switch to Desktop 1 is off unless the plist enables it"
+    );
 
     // ID 79 (Move left a space) is enabled-no-value in the fixture and
     // should fall back to the macOS default ⌃←.

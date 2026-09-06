@@ -86,15 +86,18 @@ fn scan(path: &Path) -> Result<Vec<Binding>, ScanError> {
     let mut bindings = Vec::new();
     let mut handled: HashSet<u32> = HashSet::new();
 
-    // Pass 1: every ID we know a default for. Apply overrides on top.
-    for (id, default_combo) in &defaults {
-        handled.insert(*id);
-        let (combo, enabled) = match overrides.get(id) {
-            Some(Override::Disabled(custom)) => (custom.unwrap_or(*default_combo), false),
+    // Pass 1: every ID we know a default for. Apply overrides on top. An
+    // ID with no plist entry at all is in whatever state macOS ships it,
+    // which is not always "on".
+    for d in &defaults {
+        handled.insert(d.id);
+        let (combo, enabled) = match overrides.get(&d.id) {
+            Some(Override::Disabled(custom)) => (custom.unwrap_or(d.combo), false),
             Some(Override::Custom(c)) => (*c, true),
-            Some(Override::EnabledWithDefault) | None => (*default_combo, true),
+            Some(Override::EnabledWithDefault) => (d.combo, true),
+            None => (d.combo, d.enabled),
         };
-        bindings.push(emit(*id, combo, enabled));
+        bindings.push(emit(d.id, combo, enabled));
     }
 
     // Pass 2: IDs the user has customized for which we have no default. Surface
@@ -224,7 +227,16 @@ fn custom_combo(entry: &plist::Dictionary) -> Option<KeyCombo> {
 /// **Sources**: combos verified against Apple Support HT201236 (Mac keyboard
 /// shortcuts), virtual keycodes from `<HIToolbox/Events.h>`, and System
 /// Settings on a Tahoe install.
-fn macos_defaults() -> Vec<(u32, KeyCombo)> {
+/// One entry of macOS's built-in symbolic hotkey table.
+struct DefaultHotkey {
+    id: u32,
+    combo: KeyCombo,
+    /// Whether macOS ships the shortcut switched on. A user who never
+    /// touched it has no plist entry, so this is the state that applies.
+    enabled: bool,
+}
+
+fn macos_defaults() -> Vec<DefaultHotkey> {
     use NamedKey::*;
     let cmd = Modifiers::CMD;
     let shift = Modifiers::SHIFT;
@@ -234,29 +246,42 @@ fn macos_defaults() -> Vec<(u32, KeyCombo)> {
         modifiers: m,
         key: k,
     };
+    let on = |id, combo| DefaultHotkey {
+        id,
+        combo,
+        enabled: true,
+    };
+    let off = |id, combo| DefaultHotkey {
+        id,
+        combo,
+        enabled: false,
+    };
 
     vec![
         // Mission Control / Spaces
-        (32, combo(ctrl, Key::Named(Up))),
-        (33, combo(ctrl, Key::Named(Down))),
-        (79, combo(ctrl, Key::Named(Left))),
-        (81, combo(ctrl, Key::Named(Right))),
-        (118, combo(ctrl, Key::Char('1'))),
-        (119, combo(ctrl, Key::Char('2'))),
-        (120, combo(ctrl, Key::Char('3'))),
-        (121, combo(ctrl, Key::Char('4'))),
+        on(32, combo(ctrl, Key::Named(Up))),
+        on(33, combo(ctrl, Key::Named(Down))),
+        on(79, combo(ctrl, Key::Named(Left))),
+        on(81, combo(ctrl, Key::Named(Right))),
+        // "Switch to Desktop N" only appears in System Settings once a
+        // second desktop exists, and ships unchecked even then. Verified
+        // on Tahoe: with two desktops and no plist entry, ⌃1 reaches apps.
+        off(118, combo(ctrl, Key::Char('1'))),
+        off(119, combo(ctrl, Key::Char('2'))),
+        off(120, combo(ctrl, Key::Char('3'))),
+        off(121, combo(ctrl, Key::Char('4'))),
         // Screenshots
-        (28, combo(shift | cmd, Key::Char('3'))),
-        (29, combo(ctrl | shift | cmd, Key::Char('3'))),
-        (30, combo(shift | cmd, Key::Char('4'))),
-        (31, combo(ctrl | shift | cmd, Key::Char('4'))),
-        (184, combo(shift | cmd, Key::Char('5'))),
+        on(28, combo(shift | cmd, Key::Char('3'))),
+        on(29, combo(ctrl | shift | cmd, Key::Char('3'))),
+        on(30, combo(shift | cmd, Key::Char('4'))),
+        on(31, combo(ctrl | shift | cmd, Key::Char('4'))),
+        on(184, combo(shift | cmd, Key::Char('5'))),
         // Spotlight
-        (64, combo(cmd, Key::Named(Space))),
-        (65, combo(cmd | opt, Key::Named(Space))),
+        on(64, combo(cmd, Key::Named(Space))),
+        on(65, combo(cmd | opt, Key::Named(Space))),
         // Input source switching
-        (60, combo(ctrl, Key::Named(Space))),
-        (61, combo(ctrl | opt, Key::Named(Space))),
+        on(60, combo(ctrl, Key::Named(Space))),
+        on(61, combo(ctrl | opt, Key::Named(Space))),
     ]
 }
 
