@@ -3,10 +3,10 @@
 use anyhow::{Context, Result};
 use tabled::builder::Builder;
 use tabled::settings::Style;
-use tussle_core::{Binding, ComboToken};
+use tussle_core::{Binding, ComboToken, HotkeyIndex};
 
 use crate::cli::GroupBy;
-use crate::cli::output::emit_json;
+use crate::cli::output::{BindingJson, emit_json, report_warnings};
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
 pub fn scan(
@@ -28,26 +28,10 @@ pub fn scan(
 
     let sources = default_sources(ax_timeout, ax_concurrency, app_filter.clone())?;
     warn_if_no_accessibility();
+    let index = HotkeyIndex::scan(sources.iter().map(|s| s.as_ref()));
+    report_warnings(&index);
 
-    let mut bindings: Vec<Binding> = Vec::new();
-    for src in &sources {
-        let t_src = std::time::Instant::now();
-        match src.scan() {
-            Ok(found) => {
-                for w in &found.warnings {
-                    tracing::warn!(source = src.name(), "{w}");
-                }
-                tracing::info!(
-                    source = src.name(),
-                    bindings = found.bindings.len(),
-                    elapsed_ms = t_src.elapsed().as_millis() as u64,
-                    "source scan complete",
-                );
-                bindings.extend(found.bindings.into_iter().filter(|b| b.enabled));
-            }
-            Err(e) => tracing::warn!(source = src.name(), error = %e, "source failed"),
-        }
-    }
+    let mut bindings: Vec<&Binding> = index.enabled().collect();
 
     // App filter: also enforced at the CLI side so non-Accessibility sources
     // (SymbolicHotkeys, NSUserKeyEquivalents) honor it. Accessibility has
@@ -103,7 +87,8 @@ pub fn scan(
     );
 
     if as_json {
-        return emit_json(&bindings);
+        let rows: Vec<BindingJson> = bindings.iter().map(|b| BindingJson::from(*b)).collect();
+        return emit_json(&rows);
     }
 
     if bindings.is_empty() {

@@ -4,13 +4,14 @@
 
 use anyhow::Result;
 use serde::Serialize;
-use tussle_core::{Binding, BindingSource};
+use tussle_core::{Binding, BindingSource, HotkeyIndex, Layer, Winner};
 
 #[derive(Serialize)]
 pub(super) struct BindingJson<'a> {
     combo: String,
     owner: &'a str,
     action: &'a str,
+    layer: &'static str,
     enabled: bool,
     source: SourceJson,
 }
@@ -38,6 +39,7 @@ impl<'a> From<&'a Binding> for BindingJson<'a> {
             combo: format!("{}", b.combo),
             owner: b.source.owner(),
             action: &b.label,
+            layer: b.source.layer().name(),
             enabled: b.enabled,
             source: match &b.source {
                 BindingSource::SystemSymbolicHotkey { id } => {
@@ -64,9 +66,46 @@ impl<'a> From<&'a Binding> for BindingJson<'a> {
     }
 }
 
-/// Print `bindings` as pretty-printed JSON to stdout.
-pub(super) fn emit_json(bindings: &[Binding]) -> Result<()> {
-    let rows: Vec<BindingJson> = bindings.iter().map(BindingJson::from).collect();
-    println!("{}", serde_json::to_string_pretty(&rows)?);
+/// Who gets a combo, as reported by `tussle who --json`.
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(super) enum VerdictJson<'a> {
+    Nobody,
+    Global { binding: BindingJson<'a> },
+    Contested { layer: &'static str },
+    FrontmostApp,
+}
+
+impl<'a> From<Winner<'a>> for VerdictJson<'a> {
+    fn from(w: Winner<'a>) -> Self {
+        match w {
+            Winner::Nobody => VerdictJson::Nobody,
+            Winner::Global(b) => VerdictJson::Global {
+                binding: BindingJson::from(b),
+            },
+            Winner::Contested(layer) => VerdictJson::Contested {
+                layer: layer.name(),
+            },
+            Winner::FrontmostApp => VerdictJson::FrontmostApp,
+        }
+    }
+}
+
+/// Print any serializable value as pretty-printed JSON to stdout.
+pub(super) fn emit_json<T: Serialize>(value: &T) -> Result<()> {
+    println!("{}", serde_json::to_string_pretty(value)?);
     Ok(())
+}
+
+/// Print the scan's partial-result warnings to stderr, one per line, so a
+/// user can tell an incomplete answer from a complete one.
+pub(super) fn report_warnings(index: &HotkeyIndex) {
+    for w in index.warnings() {
+        eprintln!("note: {w}");
+    }
+}
+
+/// Human-readable name of a layer for tables.
+pub(super) fn layer_label(layer: Layer) -> &'static str {
+    layer.name()
 }
