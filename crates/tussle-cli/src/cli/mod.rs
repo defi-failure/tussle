@@ -94,6 +94,15 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// List combos with the given modifiers that nothing is bound to,
+    /// e.g. `tussle free ctrl+opt`.
+    Free {
+        /// Modifiers to combine with every key, e.g. `ctrl+opt`.
+        modifiers: String,
+        /// Emit JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
     /// Look up which sources own a key combination.
     Who {
         /// Combo to look up, e.g. `cmd+opt+b`. Omit to enter interactive
@@ -131,6 +140,13 @@ pub fn run() -> Result<()> {
             key,
             app,
             group_by,
+        ),
+        Command::Free { modifiers, json } => commands::free::free(
+            &modifiers,
+            json,
+            cli.ax_timeout,
+            cli.ax_concurrency,
+            &cli.source,
         ),
         Command::Conflicts { json } => {
             commands::conflicts::conflicts(json, cli.ax_timeout, cli.ax_concurrency, &cli.source)
