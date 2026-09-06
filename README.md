@@ -86,16 +86,18 @@ tussle conflicts
 ```
 
 Lists every combo where bindings get in each other's way: two global
-bindings on one combo (contested), or a global binding sitting on a combo
-that apps also use in their menus (shadowed). Several apps reusing ⌘W in
-their own menus is not a conflict and is not listed.
+bindings on one combo, or a global binding sitting on a combo that apps
+also use in their menus. "Wins" is the binding that gets the key; "Never
+fires" is everything else on that combo. In the first row below Spotlight
+keeps working and it is Lark's emoji item that is dead. Several apps
+reusing ⌘W in their own menus is not a conflict and is not listed.
 
 ```text
- Combo      | Kind     | Fires                                   | Blocked
-------------+----------+-----------------------------------------+---------------------------------------
- cmd+space  | shadowed | macOS: Show Spotlight search            | Lark Helper: 表情
- ctrl+1     | shadowed | PixPin: 截图                            | Warp: Left Panel: Project Explorer
- ctrl+space | shadowed | macOS: Select the previous input source | Warp: New Agent Pane, WebStorm: Basic
+ Combo      | Kind                  | Wins                                    | Never fires
+------------+-----------------------+-----------------------------------------+---------------------------------------
+ cmd+space  | global beats app menu | macOS: Show Spotlight search            | Lark Helper: 表情
+ ctrl+1     | global beats app menu | PixPin: 截图                            | Warp: Left Panel: Project Explorer
+ ctrl+space | global beats app menu | macOS: Select the previous input source | Warp: New Agent Pane, WebStorm: Basic
 ```
 
 ### Filter & group

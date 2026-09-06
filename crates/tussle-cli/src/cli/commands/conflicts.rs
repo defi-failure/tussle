@@ -2,15 +2,13 @@
 
 use anyhow::Result;
 use serde::Serialize;
-use tabled::builder::Builder;
-use tabled::settings::Style;
 use tussle_core::{Binding, Conflict, ConflictKind, HotkeyIndex, Winner};
 
 use crate::cli::output::{BindingJson, VerdictJson, emit_json, layer_label, report_warnings};
 use crate::cli::sources::{default_sources, warn_if_no_accessibility};
 
-/// How many blocked bindings to name in the table before summarising.
-const MAX_LISTED_LOSERS: usize = 4;
+/// How many losing bindings to list per conflict before summarising.
+const MAX_LISTED_LOSERS: usize = 6;
 
 #[derive(Serialize)]
 struct ConflictJson<'a> {
@@ -52,21 +50,20 @@ pub fn conflicts(
         return Ok(());
     }
 
-    let mut builder = Builder::default();
-    builder.push_record(["Combo", "Kind", "Fires", "Blocked"]);
-    for c in &found {
-        builder.push_record([
-            c.combo.to_string(),
-            kind_label(c.kind).to_string(),
-            fires(c),
-            blocked(c),
-        ]);
-    }
+    // One block per conflict: a table cannot hold forty losers on a line.
     println!();
-    println!("{}", builder.build().with(Style::psql()));
+    for c in &found {
+        println!("{}", render(c));
+    }
+    println!(
+        "{} conflict{}. \"wins\" gets the key; \"never fires\" no longer reaches its owner.",
+        found.len(),
+        if found.len() == 1 { "" } else { "s" }
+    );
     Ok(())
 }
 
+/// Stable identifier used in JSON.
 fn kind_label(kind: ConflictKind) -> &'static str {
     match kind {
         ConflictKind::Contested => "contested",
@@ -74,33 +71,61 @@ fn kind_label(kind: ConflictKind) -> &'static str {
     }
 }
 
-fn name(b: &Binding) -> String {
-    format!("{}: {}", b.source.owner(), b.label)
+fn describe(b: &Binding) -> String {
+    format!(
+        "{}: {}  [{}]",
+        b.source.owner(),
+        b.label,
+        layer_label(b.source.layer())
+    )
 }
 
-fn fires(c: &Conflict<'_>) -> String {
+fn render(c: &Conflict<'_>) -> String {
+    let mut out = String::new();
     match c.winner {
-        Winner::Global(b) => name(b),
-        Winner::Contested(layer) => format!("one of the {} bindings", layer_label(layer)),
-        Winner::FrontmostApp | Winner::Nobody => String::new(),
+        Winner::Global(w) => {
+            out.push_str(&format!("{}  {}\n", c.combo, "global beats app menu"));
+            out.push_str(&format!("  wins         {}\n", describe(w)));
+            let losers: Vec<&Binding> = c
+                .bindings
+                .iter()
+                .copied()
+                .filter(|b| !std::ptr::eq(*b, w) && b.source.owner() != w.source.owner())
+                .collect();
+            push_list(&mut out, "never fires", &losers);
+        }
+        Winner::Contested(layer) => {
+            out.push_str(&format!(
+                "{}  global vs global on the {} layer; which one fires cannot be told from outside\n",
+                c.combo,
+                layer_label(layer)
+            ));
+            let (contenders, rest): (Vec<&Binding>, Vec<&Binding>) = c
+                .bindings
+                .iter()
+                .copied()
+                .partition(|b| b.source.layer() == layer);
+            push_list(&mut out, "contested", &contenders);
+            push_list(&mut out, "never fires", &rest);
+        }
+        Winner::FrontmostApp | Winner::Nobody => {
+            out.push_str(&format!("{}\n", c.combo));
+            push_list(&mut out, "bindings", &c.bindings);
+        }
     }
+    out
 }
 
-/// Everything that does not fire, shortened past `MAX_LISTED_LOSERS`.
-fn blocked(c: &Conflict<'_>) -> String {
-    let losers: Vec<String> = c
-        .bindings
-        .iter()
-        .filter(|b| !matches!(c.winner, Winner::Global(w) if std::ptr::eq(w, **b)))
-        .map(|b| name(b))
-        .collect();
-    if losers.len() <= MAX_LISTED_LOSERS {
-        losers.join(", ")
-    } else {
-        format!(
-            "{}, +{} more",
-            losers[..MAX_LISTED_LOSERS].join(", "),
-            losers.len() - MAX_LISTED_LOSERS
-        )
+fn push_list(out: &mut String, heading: &str, items: &[&Binding]) {
+    for (i, b) in items.iter().take(MAX_LISTED_LOSERS).enumerate() {
+        let head = if i == 0 { heading } else { "" };
+        out.push_str(&format!("  {head:<12} {}\n", describe(b)));
+    }
+    if items.len() > MAX_LISTED_LOSERS {
+        out.push_str(&format!(
+            "  {:<12} … and {} more\n",
+            "",
+            items.len() - MAX_LISTED_LOSERS
+        ));
     }
 }
