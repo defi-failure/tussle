@@ -137,7 +137,7 @@ pub fn who(
     }
     if let Some(probe) = &observed {
         println!();
-        print!("{}", describe_probe(&combo, probe));
+        print!("{}", describe_probe(&combo, probe, &matches));
     }
     Ok(())
 }
@@ -166,30 +166,87 @@ fn observed_json(p: &Probe) -> ObservedJson {
     }
 }
 
-/// What happened in the `PROBE_SETTLE` window after the key went through.
-fn describe_probe(combo: &KeyCombo, probe: &Probe) -> String {
+/// What happened in the `PROBE_SETTLE` window after the key went through,
+/// cross-checked against the bindings the static sources know about.
+///
+/// A reaction from an app that no source lists means the app reacts to
+/// the key from its own code; and when a system shortcut fired *and*
+/// such an app reacted, the app is observing the key rather than
+/// claiming it, which is why both happen and why no layer order can
+/// stop it.
+fn describe_probe(combo: &KeyCombo, probe: &Probe, matches: &[&Binding]) -> String {
     let mut out = format!(
         "Observed within {} ms of letting {combo} through:\n",
         PROBE_SETTLE.as_millis()
     );
-    if let Some((before, after)) = &probe.input_source_change {
-        out.push_str(&format!("  input source changed: {before} -> {after}\n"));
-    }
+    let system_fired = if let Some((before, after)) = &probe.input_source_change {
+        let by = matches
+            .iter()
+            .find(|b| matches!(b.source, BindingSource::SystemSymbolicHotkey { .. }))
+            .map(|b| format!("  ({}: {})", b.source.owner(), b.label))
+            .unwrap_or_default();
+        out.push_str(&format!(
+            "  input source changed: {before} -> {after}{by}\n"
+        ));
+        true
+    } else {
+        false
+    };
+    let mut unexplained: Vec<String> = Vec::new();
     for r in &probe.reactions {
-        out.push_str(&format!("  {}\n", describe_reaction(r)));
+        let known = is_known(r, matches);
+        out.push_str(&format!("  {}", describe_reaction(r)));
+        if known {
+            out.push('\n');
+        } else {
+            let who = reactor_name(r);
+            out.push_str("  (in no source)\n");
+            unexplained.push(who);
+        }
     }
     if probe.reactions.is_empty() && probe.input_source_change.is_none() {
         out.push_str("  nothing came to the front, no window opened, input source unchanged\n");
     }
+    for who in &unexplained {
+        out.push_str(&format!(
+            "{who} reacts to {combo} from its own code: no file or menu records it, so tussle \
+             cannot list it. To change it: {who}'s own settings.\n"
+        ));
+    }
+    if system_fired && !unexplained.is_empty() {
+        out.push_str(
+            "Both fired: the system shortcut only blocks apps that claim the key through \
+             their menus; an app that merely watches keystrokes still sees it. Turn off \
+             whichever you do not want.\n",
+        );
+    }
     out
 }
 
-fn describe_reaction(r: &Reaction) -> String {
-    let who = r
-        .app_name
+/// Whether some static binding on this combo belongs to the reacting app.
+fn is_known(r: &Reaction, matches: &[&Binding]) -> bool {
+    matches.iter().any(|b| {
+        let same_bundle = match (b.source.bundle_id(), r.bundle_id.as_deref()) {
+            (Some(a), Some(c)) => a.eq_ignore_ascii_case(c),
+            _ => false,
+        };
+        let same_name = r
+            .app_name
+            .as_deref()
+            .is_some_and(|n| n.eq_ignore_ascii_case(b.source.owner()));
+        same_bundle || same_name
+    })
+}
+
+fn reactor_name(r: &Reaction) -> String {
+    r.app_name
         .clone()
         .or_else(|| r.bundle_id.clone())
-        .unwrap_or_else(|| format!("pid {}", r.pid));
+        .unwrap_or_else(|| format!("pid {}", r.pid))
+}
+
+fn describe_reaction(r: &Reaction) -> String {
+    let who = reactor_name(r);
     match r.kind {
         ReactionKind::Activated => format!("{who} came to the front"),
         ReactionKind::NewWindows(1) => format!("{who} opened a window"),
@@ -290,4 +347,56 @@ fn capture_interactively(probe: bool) -> Result<(Option<KeyCombo>, Option<Probe>
         }
     };
     Ok((combo, probed))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tussle_core::{Key, Modifiers, SystemDispatch};
+
+    fn reaction(name: &str, bundle: Option<&str>) -> Reaction {
+        Reaction {
+            pid: 1,
+            app_name: Some(name.into()),
+            bundle_id: bundle.map(Into::into),
+            kind: ReactionKind::NewWindows(1),
+        }
+    }
+
+    #[test]
+    fn reactions_are_matched_to_claimants_by_bundle_or_name() {
+        let combo = KeyCombo {
+            modifiers: Modifiers::CTRL,
+            key: Key::Named(tussle_core::NamedKey::Space),
+        };
+        let system = Binding {
+            combo,
+            source: BindingSource::SystemSymbolicHotkey {
+                id: Some(60),
+                dispatch: SystemDispatch::BeforeApps,
+            },
+            label: "Select the previous input source".into(),
+            enabled: true,
+        };
+        let warp = Binding {
+            combo,
+            source: BindingSource::AppMenuItem {
+                bundle_id: "dev.warp.Warp-Stable".into(),
+                app_name: Some("Warp".into()),
+                menu_path: vec![],
+            },
+            label: "New Agent Pane".into(),
+            enabled: true,
+        };
+        let matches = [&system, &warp];
+        assert!(is_known(&reaction("Warp", None), &matches));
+        assert!(is_known(
+            &reaction("warp", Some("dev.warp.Warp-Stable")),
+            &matches
+        ));
+        assert!(!is_known(
+            &reaction("Codex", Some("com.openai.codex")),
+            &matches
+        ));
+    }
 }
