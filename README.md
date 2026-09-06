@@ -24,14 +24,17 @@ disable to free a combo.
 
 ## Install
 
-Installer script (puts `tussle` in `~/.cargo/bin`):
+One universal binary runs on both Apple Silicon and Intel Macs. Grab it from
+the [Releases](https://github.com/defi-failure/tussle/releases) page, or:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/defi-failure/tussle/releases/latest/download/tussle-cli-installer.sh | sh
+curl -L -o tussle https://github.com/defi-failure/tussle/releases/download/v0.0.1-alpha.1/tussle
+chmod +x tussle
+sudo mv tussle /usr/local/bin/
 ```
 
-Prebuilt tarballs for Apple Silicon and Intel are on the
-[Releases](https://github.com/defi-failure/tussle/releases) page.
+If you downloaded it with a browser instead of `curl`, macOS quarantines
+the file; run `xattr -d com.apple.quarantine tussle` before the first launch.
 
 From source (requires Rust 1.88+):
 
@@ -41,8 +44,8 @@ cd tussle
 cargo install --path crates/tussle-cli
 ```
 
-Uninstall by deleting `~/.cargo/bin/tussle`, or `cargo uninstall tussle-cli`
-if you built from source.
+Uninstall by deleting the binary, or `cargo uninstall tussle-cli` if you
+built from source.
 
 ## Usage
 
