@@ -344,19 +344,20 @@ fn decode_modifiers(mask: u64) -> Modifiers {
 fn decode_key(char_code: i64, vk: i64) -> Key {
     // Virtual keycode wins for keys with a canonical NamedKey, since the vk
     // is layout-independent while the char_code reflects the active layout.
-    if vk != UNSET && (0..=u16::MAX as i64).contains(&vk) {
-        if let Some(named) = vk_to_named(vk as u16) {
-            return Key::Named(named);
-        }
+    if vk != UNSET
+        && (0..=u16::MAX as i64).contains(&vk)
+        && let Some(named) = vk_to_named(vk as u16)
+    {
+        return Key::Named(named);
     }
 
     // Fall back to the printable character if Apple set one.
-    if char_code != UNSET && (0..=u32::MAX as i64).contains(&char_code) {
-        if let Some(c) = char::from_u32(char_code as u32) {
-            if !c.is_control() {
-                return Key::Char(c);
-            }
-        }
+    if char_code != UNSET
+        && (0..=u32::MAX as i64).contains(&char_code)
+        && let Some(c) = char::from_u32(char_code as u32)
+        && !c.is_control()
+    {
+        return Key::Char(c);
     }
 
     // Last resort: surface the raw vk so the caller can still see what was
