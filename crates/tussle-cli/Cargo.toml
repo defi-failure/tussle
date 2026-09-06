@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 publish.workspace = true
 
 [[bin]]
@@ -22,3 +23,6 @@ tabled = { version = "0.22.0", default-features = false, features = ["std"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tussle-core = { path = "../tussle-core" }
+
+[package.metadata.dist]
+dist = true
