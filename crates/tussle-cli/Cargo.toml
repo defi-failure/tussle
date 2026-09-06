@@ -1,7 +1,11 @@
 [package]
 name = "tussle-cli"
+description = "Inspect every keyboard shortcut on your Mac"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [[bin]]
