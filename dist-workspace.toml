@@ -17,3 +17,6 @@ install-path = "CARGO_HOME"
 hosting = "github"
 # Whether to install an updater program
 install-updater = false
+# Dependabot bumps action versions inside release.yml; do not fail the
+# plan step on that drift. Regenerate with `dist generate` when bumping dist.
+allow-dirty = ["ci"]
