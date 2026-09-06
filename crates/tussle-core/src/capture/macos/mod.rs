@@ -6,6 +6,8 @@ mod keydown;
 mod permission;
 mod probe;
 
+pub(super) use permission::input_monitoring_status;
+
 use crate::capture::{Captured, Probe};
 use crate::{Modifiers, ScanError};
 

@@ -46,6 +46,28 @@ where
     }
 }
 
+/// State of a macOS privacy permission, read without prompting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionStatus {
+    Granted,
+    Denied,
+    /// The user has not been asked yet; macOS will prompt on first use.
+    Undetermined,
+}
+
+/// Whether this process may install a keyboard event tap (Input
+/// Monitoring). Never prompts; `capture_one` does.
+pub fn input_monitoring_status() -> PermissionStatus {
+    #[cfg(target_os = "macos")]
+    {
+        macos::input_monitoring_status()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        PermissionStatus::Granted
+    }
+}
+
 /// Wait for the next keystroke, let it through, and watch for `settle` who
 /// reacts: apps coming to the front, new windows, an input source change.
 ///

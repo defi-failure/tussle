@@ -103,6 +103,12 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Check permissions and sources; explain what a missing one hides.
+    Doctor {
+        /// Emit JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
     /// Look up which sources own a key combination.
     Who {
         /// Combo to look up, e.g. `cmd+opt+b`. Omit to enter interactive
@@ -148,6 +154,9 @@ pub fn run() -> Result<()> {
             cli.ax_concurrency,
             &cli.source,
         ),
+        Command::Doctor { json } => {
+            commands::doctor::doctor(json, cli.ax_timeout, cli.ax_concurrency)
+        }
         Command::Conflicts { json } => {
             commands::conflicts::conflicts(json, cli.ax_timeout, cli.ax_concurrency, &cli.source)
         }

@@ -20,6 +20,22 @@ use super::capture_error;
 #[link(name = "IOKit", kind = "framework")]
 unsafe extern "C" {
     fn IOHIDRequestAccess(requestType: u32) -> u8;
+    /// `IOHIDAccessType IOHIDCheckAccess(IOHIDRequestType)`: reports the
+    /// current decision without prompting.
+    ///   kIOHIDAccessTypeGranted = 0, kIOHIDAccessTypeDenied = 1,
+    ///   kIOHIDAccessTypeUnknown = 2
+    fn IOHIDCheckAccess(requestType: u32) -> u32;
+}
+
+/// Current Input Monitoring decision, without prompting.
+pub(crate) fn input_monitoring_status() -> crate::capture::PermissionStatus {
+    use crate::capture::PermissionStatus;
+    // SAFETY: pure C call, no preconditions.
+    match unsafe { IOHIDCheckAccess(KIOHID_REQUEST_TYPE_LISTEN_EVENT) } {
+        0 => PermissionStatus::Granted,
+        1 => PermissionStatus::Denied,
+        _ => PermissionStatus::Undetermined,
+    }
 }
 const KIOHID_REQUEST_TYPE_LISTEN_EVENT: u32 = 1;
 

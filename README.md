@@ -79,6 +79,43 @@ tussle who
 # Press the hotkey to look up...
 ```
 
+The verdict ends with where to change the winning binding: the System
+Settings section for a system shortcut, the app's own settings for a
+menubar app's hotkey, App Shortcuts for a menu item.
+
+Some global hotkeys leave no trace anywhere: apps register them in code
+(`RegisterEventHotKey`), and no file or menu shows them. `--probe` lets
+the key through instead of swallowing it and watches for 800 ms which
+apps come to the front or open windows and whether the input source
+changed. Whatever the key does will happen.
+
+```bash
+tussle who --probe
+# press ctrl+space: the input source switches, and if some app also
+# reacts, it shows up under "Observed".
+```
+
+### Find a free combo
+
+```bash
+tussle free ctrl+opt
+```
+
+Tries every key with those modifiers and sorts the results into free
+everywhere, used only inside app menus (free as a global hotkey, at the
+cost of that menu item), and taken globally.
+
+### Check the setup
+
+```bash
+tussle doctor
+```
+
+Reports the Accessibility and Input Monitoring permissions without
+prompting, whether the system shortcut table and the preferences plist
+can be read, and how many running apps answered; each line says what a
+missing piece hides and where to grant it.
+
 ### Find conflicts
 
 ```bash
@@ -144,7 +181,8 @@ and whether it is `enabled`.
 macOS prompts the first time each is needed:
 
 - **Accessibility** — to read each running app's menu shortcuts.
-- **Input Monitoring** — only for `tussle who` interactive capture.
+- **Input Monitoring** — only for `tussle who` interactive capture and
+  `--probe`.
 
 Grant from `System Settings → Privacy & Security`, then re-run.
 
