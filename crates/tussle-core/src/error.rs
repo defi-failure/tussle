@@ -27,6 +27,10 @@ pub enum ScanWarning {
     /// A configuration file was skipped because it could not be read or
     /// parsed. Everything else from the same source is still reported.
     Skipped { path: PathBuf, message: String },
+    /// A running app did not answer Accessibility queries within the
+    /// timeout, even on retry, so its menu shortcuts are missing or
+    /// incomplete.
+    Unresponsive { app: String },
 }
 
 impl std::fmt::Display for ScanWarning {
@@ -35,6 +39,10 @@ impl std::fmt::Display for ScanWarning {
             ScanWarning::Skipped { path, message } => {
                 write!(f, "skipped {}: {message}", path.display())
             }
+            ScanWarning::Unresponsive { app } => write!(
+                f,
+                "{app} did not answer Accessibility queries in time; its menu shortcuts are missing"
+            ),
         }
     }
 }

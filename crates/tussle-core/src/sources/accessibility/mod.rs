@@ -77,7 +77,6 @@ impl Source for Accessibility {
                 self.max_concurrency,
                 &self.bundle_filter,
             )
-            .map(SourceScan::from)
         }
         #[cfg(not(target_os = "macos"))]
         {

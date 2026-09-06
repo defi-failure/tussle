@@ -7,16 +7,26 @@ mod running_apps;
 
 use std::thread;
 
-use crate::{Binding, ScanError};
+use crate::sources::SourceScan;
+use crate::{ScanError, ScanWarning};
+
+use menu_walker::WalkResult;
+use running_apps::RunningApp;
+
+/// Multiplier applied to the messaging timeout when an app is asked a
+/// second time. Apps woken from App Nap routinely need a few seconds for
+/// their first Accessibility reply and answer quickly after that; with a
+/// 1s first pass this gives them 5s.
+const RETRY_TIMEOUT_FACTOR: f32 = 5.0;
 
 pub(super) fn scan(
     messaging_timeout: f32,
     max_concurrency: usize,
     bundle_filter: &[String],
-) -> Result<Vec<Binding>, ScanError> {
+) -> Result<SourceScan, ScanError> {
     if !is_trusted() {
         tracing::warn!("Accessibility permission missing — skipping menu enumeration");
-        return Ok(Vec::new());
+        return Ok(SourceScan::default());
     }
 
     // Each app's walk is a sequence of synchronous AX IPC calls — wallclock
@@ -50,21 +60,97 @@ pub(super) fn scan(
         max_concurrency
     };
 
-    let mut bindings = Vec::new();
+    let refs: Vec<&RunningApp> = apps.iter().collect();
+    let mut results = walk_all(&refs, messaging_timeout, chunk_size);
+
+    // Second pass for apps that did not answer in time. The first pass
+    // deliberately uses a short timeout so one stuck app cannot stall the
+    // scan; but an app that was merely asleep answers on the retry, and
+    // dropping it would silently hide every one of its shortcuts.
+    let slow: Vec<usize> = results
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.timed_out)
+        .map(|(i, _)| i)
+        .collect();
+    let mut warnings = Vec::new();
+    if !slow.is_empty() {
+        let retry_timeout = retry_timeout(messaging_timeout);
+        tracing::info!(
+            apps = slow.len(),
+            timeout_secs = retry_timeout,
+            "retrying apps that did not answer in time",
+        );
+        let slow_refs: Vec<&RunningApp> = slow.iter().map(|&i| &apps[i]).collect();
+        let retried = walk_all(&slow_refs, retry_timeout, chunk_size);
+        for (&i, second) in slow.iter().zip(retried) {
+            let first = std::mem::take(&mut results[i]);
+            let (best, unresponsive) = resolve_retry(first, second);
+            if unresponsive {
+                warnings.push(ScanWarning::Unresponsive {
+                    app: display_name(&apps[i]),
+                });
+            }
+            results[i] = best;
+        }
+    }
+
+    Ok(SourceScan {
+        bindings: results.into_iter().flat_map(|r| r.bindings).collect(),
+        warnings,
+    })
+}
+
+/// Walk every app, `chunk_size` at a time, one thread per app. Results
+/// are in the same order as `apps`.
+fn walk_all(apps: &[&RunningApp], timeout: f32, chunk_size: usize) -> Vec<WalkResult> {
+    let mut results = Vec::with_capacity(apps.len());
     for batch in apps.chunks(chunk_size) {
-        let batch_bindings: Vec<Binding> = thread::scope(|s| {
+        let batch_results: Vec<WalkResult> = thread::scope(|s| {
             let handles: Vec<_> = batch
                 .iter()
-                .map(|app| s.spawn(move || menu_walker::walk_app_menus(app, messaging_timeout)))
+                .map(|app| s.spawn(move || menu_walker::walk_app_menus(app, timeout)))
                 .collect();
             handles
                 .into_iter()
-                .flat_map(|h| h.join().unwrap_or_default())
+                .map(|h| h.join().unwrap_or_default())
                 .collect()
         });
-        bindings.extend(batch_bindings);
+        results.extend(batch_results);
     }
-    Ok(bindings)
+    results
+}
+
+/// Timeout for the second attempt. `0` means "macOS default" and stays
+/// `0`: there is nothing longer to offer.
+fn retry_timeout(messaging_timeout: f32) -> f32 {
+    if messaging_timeout > 0.0 {
+        messaging_timeout * RETRY_TIMEOUT_FACTOR
+    } else {
+        0.0
+    }
+}
+
+/// Pick the better of two walks of the same app. A finished second walk
+/// wins outright. If the app timed out again, keep whichever attempt saw
+/// more and report the app as unresponsive.
+fn resolve_retry(first: WalkResult, second: WalkResult) -> (WalkResult, bool) {
+    if !second.timed_out {
+        return (second, false);
+    }
+    let best = if second.bindings.len() >= first.bindings.len() {
+        second
+    } else {
+        first
+    };
+    (best, true)
+}
+
+fn display_name(app: &RunningApp) -> String {
+    app.app_name
+        .clone()
+        .or_else(|| app.bundle_id.clone())
+        .unwrap_or_else(|| format!("pid {}", app.pid))
 }
 
 pub(super) fn is_trusted() -> bool {
@@ -147,5 +233,52 @@ mod tests {
             None,
             &filter
         ));
+    }
+
+    fn walk(n: usize, timed_out: bool) -> WalkResult {
+        use crate::{Binding, BindingSource, Key, KeyCombo, Modifiers};
+        WalkResult {
+            bindings: (0..n)
+                .map(|i| Binding {
+                    combo: KeyCombo {
+                        modifiers: Modifiers::CMD,
+                        key: Key::Char('a'),
+                    },
+                    source: BindingSource::AppMenuItem {
+                        bundle_id: "com.example".into(),
+                        app_name: None,
+                        menu_path: vec![],
+                    },
+                    label: format!("item {i}"),
+                    enabled: true,
+                })
+                .collect(),
+            timed_out,
+        }
+    }
+
+    #[test]
+    fn finished_retry_replaces_partial_first_walk() {
+        let (best, unresponsive) = resolve_retry(walk(3, true), walk(40, false));
+        assert_eq!(best.bindings.len(), 40);
+        assert!(!best.timed_out);
+        assert!(!unresponsive);
+    }
+
+    #[test]
+    fn app_that_times_out_twice_keeps_larger_partial_and_is_flagged() {
+        let (best, unresponsive) = resolve_retry(walk(7, true), walk(2, true));
+        assert_eq!(best.bindings.len(), 7);
+        assert!(unresponsive);
+        let (best, unresponsive) = resolve_retry(walk(0, true), walk(5, true));
+        assert_eq!(best.bindings.len(), 5);
+        assert!(unresponsive);
+    }
+
+    #[test]
+    fn retry_timeout_scales_but_keeps_system_default() {
+        assert_eq!(retry_timeout(1.0), 5.0);
+        assert_eq!(retry_timeout(0.5), 2.5);
+        assert_eq!(retry_timeout(0.0), 0.0);
     }
 }
