@@ -63,13 +63,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-targets
 
-  build-intel:
-    name: build (x86_64-apple-darwin)
+  build:
+    name: build (${{ matrix.target }})
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-apple-darwin
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --workspace --release --target x86_64-apple-darwin
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo build --workspace --release --target ${{ matrix.target }}
