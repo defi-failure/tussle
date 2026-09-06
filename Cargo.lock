@@ -789,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "tussle-cli"
-version = "0.0.1"
+version = "0.0.1-alpha.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -804,7 +804,7 @@ dependencies = [
 
 [[package]]
 name = "tussle-core"
-version = "0.0.1"
+version = "0.0.1-alpha.1"
 dependencies = [
  "accessibility-sys",
  "bitflags",
