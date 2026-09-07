@@ -4,6 +4,16 @@ All notable changes to this project. Generated from the commit log with
 [git-cliff](https://git-cliff.org); the format follows
 [Conventional Commits](https://www.conventionalcommits.org).
 
+## Unreleased
+
+### Fixed
+
+- **build**: Keep a blank line between changelog groups
+
+### Build and CI
+
+- Generate release notes and CHANGELOG.md from the commit log
+
 ## 0.0.1-alpha.2 — 2026-09-07
 
 ### Added
@@ -23,19 +33,26 @@ All notable changes to this project. Generated from the commit log with
 - **cli**: Say where to change the winning binding in who
 - **cli**: Add free to list unused combos for a modifier set
 - Add doctor to check permissions and sources
-- **cli**: Explain probe reactions that no source can account for### Fixed
+- **cli**: Explain probe reactions that no source can account for
+
+### Fixed
 
 - **core**: Retry apps that time out during the Accessibility walk
 - **core**: Desktop-switching hotkeys are off unless the plist enables them
-- **core**: Input method menus and bare keys are not global hotkeys### Changed
+- **core**: Input method menus and bare keys are not global hotkeys
+
+### Changed
 
 - **core**: Return warnings alongside bindings from Source::scan
 - **cli**: Drive scan and who through HotkeyIndex
 - **core**: Make the symbolic hotkey id optional
-- **cli**: Output for terminals and pipes the way gh does it### Build and CI
+- **cli**: Output for terminals and pipes the way gh does it
+
+### Build and CI
 
 - Create releases as drafts for manual publishing
 - **deps**: Bump actions/checkout from 5 to 7 (#2)
+
 ## 0.0.1-alpha.1 — 2026-09-06
 
 ### Added
@@ -81,7 +98,9 @@ All notable changes to this project. Generated from the commit log with
 - **core**: Add ComboToken for token-level combo matching
 - **cli**: Add --key and --app filters to scan (with push-down)
 - **cli**: Add --group-by to scan, default = combo
-- **cli**: Auto-pipe scan table through $PAGER, with --no-pager opt-out### Fixed
+- **cli**: Auto-pipe scan table through $PAGER, with --no-pager opt-out
+
+### Fixed
 
 - **cli**: Default --keys to names; symbols opt-in only
 - **core**: Treat AXMenuItem no-command bit as cmd suppressor
@@ -94,14 +113,18 @@ All notable changes to this project. Generated from the commit log with
 - **combo**: Normalize LF (0x0A) to NamedKey::Return in from_char
 - **cli**: EnvFilter target is 'tussle' (binary), not 'tussle_cli'
 - **accessibility**: Decode undocumented AX fn modifier bit (1<<4)
-- **cli**: --app filter also matches bundle_id, not just localized owner### Performance
+- **cli**: --app filter also matches bundle_id, not just localized owner
+
+### Performance
 
 - **accessibility**: Skip Prohibited-policy apps when scanning
 - **accessibility**: Cap per-app AX messaging timeout at 1s
 - **accessibility**: Skip XPC service processes by executable path
 - **accessibility**: Scan apps in parallel via thread::scope, cap 128
 - **accessibility**: Skip apps with no bundleURL (catches sandboxed WebContent)
-- **accessibility**: Bump default max_concurrency from 128 to 512### Changed
+- **accessibility**: Bump default max_concurrency from 128 to 512
+
+### Changed
 
 - **cli**: Drop --keys flag and unicode symbol rendering
 - **core**: Consolidate modifier/key/combo types into combo module
@@ -112,7 +135,9 @@ All notable changes to this project. Generated from the commit log with
 - **core**: Split capture.rs into module with macos submod
 - **core**: Split accessibility source into module with macos submod
 - **cli**: Split main.rs into cli module (commands/sources/output)
-- Apply clippy suggestions from Rust 1.98### Documentation
+- Apply clippy suggestions from Rust 1.98
+
+### Documentation
 
 - Drop internal milestone labels from committed comments
 - **core**: Drop unverified NSUserKeyEquivalents reference URL
@@ -123,9 +148,13 @@ All notable changes to this project. Generated from the commit log with
 - Mention how to uninstall
 - Add CI badge and correct minimum Rust version
 - Document installer script and prebuilt binaries
-- Install instructions for the universal binary### Testing
+- Install instructions for the universal binary
 
-- **core**: Add symbolichotkeys fixture and ignored parser test### Build and CI
+### Testing
+
+- **core**: Add symbolichotkeys fixture and ignored parser test
+
+### Build and CI
 
 - Declare MSRV 1.88 and package metadata across the workspace
 - Drop unused crates and narrow macOS binding features
@@ -137,6 +166,9 @@ All notable changes to this project. Generated from the commit log with
 - Configure cargo-dist for macOS release builds
 - Add cargo-dist release workflow
 - Let dist tolerate dependabot edits to release.yml
-- Replace cargo-dist with a universal-binary release workflow### Revert
+- Replace cargo-dist with a universal-binary release workflow
+
+### Revert
 
 - **cli**: Remove auto-pager (pager UX wasn't an improvement)
+
